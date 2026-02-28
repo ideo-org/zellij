@@ -12,6 +12,7 @@ mod plugin_pane;
 mod search;
 pub mod terminal_pane;
 mod tiled_panes;
+mod kitty_graphics;
 
 pub use active_panes::*;
 pub use alacritty_functions::*;
