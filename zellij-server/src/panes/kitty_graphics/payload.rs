@@ -46,6 +46,7 @@ pub fn decode_kitty_payload(data: &[u8], compression: Compression) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn test_decode_plain_base64() {
@@ -95,6 +96,6 @@ mod tests {
         let empty = b"";
         let result = decode_kitty_payload(empty, Compression::None);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), vec![]);
+        assert_eq!(result.unwrap(), Vec::<u8>::new());
     }
 }

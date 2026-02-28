@@ -1,5 +1,7 @@
 use crate::output::{CharacterChunk, SixelImageChunk};
 use crate::panes::sixel::SixelImageStore;
+use crate::panes::kitty_graphics::apc_parser::{ApcParser, ApcParserResult};
+use crate::panes::kitty_graphics::dispatcher::dispatch_kitty_apc;
 use crate::panes::LinkHandler;
 use crate::panes::{
     grid::Grid,
@@ -133,6 +135,7 @@ pub struct TerminalPane {
     pub active_at: Instant,
     pub style: Style,
     vte_parser: vte::Parser,
+    apc_parser: ApcParser,
     selection_scrolled_at: time::Instant,
     content_offset: Offset,
     pane_title: String,
@@ -203,7 +206,36 @@ impl Pane for TerminalPane {
     fn handle_pty_bytes(&mut self, bytes: VteBytes) {
         self.set_should_render(true);
         for &byte in &bytes {
-            self.vte_parser.advance(&mut self.grid, byte);
+            match self.apc_parser.advance(byte) {
+                ApcParserResult::PassThrough(b) => {
+                    self.vte_parser.advance(&mut self.grid, b);
+                },
+                ApcParserResult::Collecting => {
+                    // APC in progress, don't send to vte
+                },
+                ApcParserResult::Complete(apc_data) => {
+                    // Complete APC captured — dispatch to kitty handler
+                    let (cursor_y, cursor_x) = self
+                        .grid
+                        .cursor_coordinates()
+                        .unwrap_or((0, 0));
+                    let _result = dispatch_kitty_apc(
+                        &apc_data,
+                        &mut self.grid.kitty_image_store.borrow_mut(),
+                        &mut self.grid.kitty_chunk_assembler,
+                        cursor_y as u32,
+                        cursor_x as u32,
+                    );
+                    // TODO: handle result.response (write back to PTY) — Task 14
+                    // TODO: handle result.passthrough_apc — Task 13
+                },
+                ApcParserResult::Aborted(bytes) => {
+                    // Not a Kitty APC, pass through to vte
+                    for b in bytes {
+                        self.vte_parser.advance(&mut self.grid, b);
+                    }
+                },
+            }
         }
     }
     fn cursor_coordinates(&self, _client_id: Option<ClientId>) -> Option<(usize, usize)> {
@@ -986,6 +1018,7 @@ impl TerminalPane {
             geom: position_and_size,
             geom_override: None,
             vte_parser: vte::Parser::new(),
+            apc_parser: ApcParser::new(),
             active_at: Instant::now(),
             style,
             selection_scrolled_at: time::Instant::now(),

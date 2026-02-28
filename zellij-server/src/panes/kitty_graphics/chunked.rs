@@ -19,7 +19,7 @@ pub enum ChunkResult {
 }
 
 /// In-progress transmission being assembled from multiple chunks.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PendingTransmission {
     pub image_id: Option<u32>,
     /// Raw base64 chunks (NOT decoded), in arrival order.
@@ -31,6 +31,7 @@ pub struct PendingTransmission {
 ///
 /// Each transmission is keyed by `image_id`. When `image_id` is `None` or `0`,
 /// a temporary internal ID is assigned so chunks can still be grouped.
+#[derive(Clone)]
 pub struct ChunkAssembler {
     pending: HashMap<u32, PendingTransmission>,
     next_temp_id: u32,

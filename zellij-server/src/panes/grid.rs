@@ -1,4 +1,6 @@
 use super::sixel::{PixelRect, SixelGrid, SixelImageStore};
+use super::kitty_graphics::chunked::ChunkAssembler;
+use super::kitty_graphics::store::KittyImageStore;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -404,6 +406,8 @@ pub struct Grid {
     // disabled by user config?
     click: Click,
     hyperlink_tracker: HyperlinkTracker,
+    pub(crate) kitty_image_store: Rc<RefCell<KittyImageStore>>,
+    pub(crate) kitty_chunk_assembler: ChunkAssembler,
 }
 
 const CLICK_TIME_THRESHOLD: u128 = 400; // Doherty Threshold
@@ -594,7 +598,12 @@ impl Grid {
             explicitly_disable_kitty_keyboard_protocol,
             click: Click::default(),
             hyperlink_tracker: HyperlinkTracker::new(),
+            kitty_image_store: Rc::new(RefCell::new(KittyImageStore::new())),
+            kitty_chunk_assembler: ChunkAssembler::new(),
         }
+    }
+    pub fn kitty_image_store(&self) -> &Rc<RefCell<KittyImageStore>> {
+        &self.kitty_image_store
     }
     pub fn render_full_viewport(&mut self) {
         self.output_buffer.update_all_lines();

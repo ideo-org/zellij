@@ -9,3 +9,4 @@ pub mod placement;
 pub mod delete;
 pub mod query;
 pub mod chunked;
+pub mod dispatcher;

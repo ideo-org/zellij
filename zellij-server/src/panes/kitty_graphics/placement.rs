@@ -21,7 +21,7 @@ pub struct PlaceholderCell {
 
 /// Output of a successful place operation: the 2D grid of placeholder cells
 /// plus metadata needed by the grid integration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlacementOutput {
     pub image_id: u32,
     pub placement_id: u32,
