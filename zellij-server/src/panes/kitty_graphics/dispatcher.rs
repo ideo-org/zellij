@@ -3,6 +3,7 @@
 /// Routes a complete APC payload (captured by ApcParser) to the correct
 /// handler based on the parsed command's action field.
 use super::chunked::ChunkAssembler;
+use super::chunked::ChunkResult;
 use super::command::{KittyAction, KittyCommand};
 use super::delete::handle_delete;
 use super::query::handle_query;
@@ -42,16 +43,15 @@ pub fn dispatch_kitty_apc(
     };
 
     // 2. Handle chunked transmission (m=1)
-    if cmd.more_chunks {
-        chunk_assembler.add_chunk(cmd.image_id, &cmd.payload, true);
-        return DispatchResult {
-            response: vec![],
-            passthrough_apc: vec![],
-        };
-    }
-    // NOTE: Full chunked assembly integration (reassembling prior chunks
-    // and passing the concatenated payload to handlers) is deferred to a
-    // later task.  For now, only single-shot payloads are handled.
+    let payload = match chunk_assembler.add_chunk(cmd.image_id, &cmd.payload, cmd.more_chunks) {
+        ChunkResult::Buffered => {
+            return DispatchResult {
+                response: vec![],
+                passthrough_apc: vec![],
+            };
+        },
+        ChunkResult::Complete(payload) => payload,
+    };
 
     // 3. Dispatch by action
     let action = cmd
@@ -60,7 +60,7 @@ pub fn dispatch_kitty_apc(
         .unwrap_or(KittyAction::TransmitAndDisplay);
     match action {
         KittyAction::TransmitAndDisplay | KittyAction::Transmit => {
-            let response = handle_transmit(&cmd, &cmd.payload, store);
+            let response = handle_transmit(&cmd, &payload, store);
             DispatchResult {
                 response,
                 passthrough_apc: vec![],
@@ -187,5 +187,36 @@ mod tests {
         assert!(store.get(50).is_none());
         // Assembler should have pending data
         assert_eq!(assembler.pending_count(), 1);
+    }
+
+    #[test]
+    fn dispatch_chunked_transmit_reassembles_payload() {
+        let mut store = KittyImageStore::new();
+        let mut assembler = ChunkAssembler::new();
+
+        // First chunk (base64 data split across commands)
+        let result = dispatch_kitty_apc(b"a=T,i=42,m=1;UE", &mut store, &mut assembler, 0, 0);
+        assert!(result.response.is_empty());
+        assert_eq!(store.image_count(), 0);
+
+        // Final chunk should trigger decode and store image data
+        let result = dispatch_kitty_apc(b"a=T,i=42;5H", &mut store, &mut assembler, 0, 0);
+        assert!(result.response.len() > 0);
+        assert_eq!(store.image_count(), 1);
+        assert_eq!(store.get(42).unwrap().data, b"PNG");
+    }
+
+    #[test]
+    fn dispatch_chunked_transmit_without_image_id_reassembles_payload() {
+        let mut store = KittyImageStore::new();
+        let mut assembler = ChunkAssembler::new();
+
+        let result = dispatch_kitty_apc(b"a=T,m=1;SG", &mut store, &mut assembler, 0, 0);
+        assert!(result.response.is_empty());
+        assert_eq!(store.image_count(), 0);
+
+        let result = dispatch_kitty_apc(b"a=T,m=0;VsbG8ga2l0dHk=", &mut store, &mut assembler, 0, 0);
+        assert!(result.response.len() > 0);
+        assert_eq!(store.image_count(), 1);
     }
 }

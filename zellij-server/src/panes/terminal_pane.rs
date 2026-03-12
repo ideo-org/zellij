@@ -219,15 +219,19 @@ impl Pane for TerminalPane {
                         .grid
                         .cursor_coordinates()
                         .unwrap_or((0, 0));
-                    let _result = dispatch_kitty_apc(
+                    let result = dispatch_kitty_apc(
                         &apc_data,
                         &mut self.grid.kitty_image_store.borrow_mut(),
                         &mut self.grid.kitty_chunk_assembler,
                         cursor_y as u32,
                         cursor_x as u32,
                     );
-                    // TODO: handle result.response (write back to PTY) — Task 14
-                    // TODO: handle result.passthrough_apc — Task 13
+                    if !result.response.is_empty() {
+                        self.grid.pending_messages_to_pty.push(result.response);
+                    }
+                    if !result.passthrough_apc.is_empty() {
+                        self.grid.pending_messages_to_pty.push(result.passthrough_apc);
+                    }
                 },
                 ApcParserResult::Aborted(bytes) => {
                     // Not a Kitty APC, pass through to vte

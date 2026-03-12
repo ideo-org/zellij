@@ -112,12 +112,14 @@ impl ChunkAssembler {
         match image_id {
             Some(id) if id != 0 => id,
             _ => {
-                // Check if there's already a pending transmission with no explicit id.
-                // For simplicity, assign a fresh temp id for each new anonymous transmission
-                // that starts with more=true. If we're finalizing (more=false) and there's
-                // exactly one anonymous pending, we could match it — but the spec expects
-                // image_id to be consistent across chunks of the same image.
-                // We'll allocate a new temp ID when there's no pending entry for the "current" temp.
+                // Reuse an existing anonymous in-progress transmission, if one exists.
+                if let Some((id, _)) = self.pending.iter().find(|(_, pending)| {
+                    pending.image_id.is_none() || pending.image_id == Some(0)
+                }) {
+                    return *id;
+                }
+
+                // No matching anonymous transmission: allocate a fresh temporary ID.
                 let id = self.next_temp_id;
                 self.next_temp_id = self.next_temp_id.wrapping_add(1);
                 id
@@ -263,7 +265,7 @@ mod tests {
         let result = assembler.add_chunk(Some(99), b"Q0ND", false); // "CCC" in base64
 
         // Must be exact concatenation with no separators
-        assert_eq!(result, ChunkResult::Complete(b"QUFBQKJCQ0ND".to_vec()));
+        assert_eq!(result, ChunkResult::Complete(b"QUFBQkJCQ0ND".to_vec()));
     }
 
     #[test]
@@ -288,5 +290,18 @@ mod tests {
         let mut assembler = ChunkAssembler::new();
         let result = assembler.add_chunk(None, b"anon_data", false);
         assert_eq!(result, ChunkResult::Complete(b"anon_data".to_vec()));
+    }
+
+    #[test]
+    fn kitty_chunk_anonymous_multi_chunk() {
+        let mut assembler = ChunkAssembler::new();
+
+        let r1 = assembler.add_chunk(None, b"first", true);
+        assert_eq!(r1, ChunkResult::Buffered);
+        assert_eq!(assembler.pending_count(), 1);
+
+        let r2 = assembler.add_chunk(Some(0), b"second", false);
+        assert_eq!(r2, ChunkResult::Complete(b"firstsecond".to_vec()));
+        assert_eq!(assembler.pending_count(), 0);
     }
 }
