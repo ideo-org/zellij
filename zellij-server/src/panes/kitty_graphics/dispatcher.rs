@@ -2,10 +2,12 @@
 ///
 /// Routes a complete APC payload (captured by ApcParser) to the correct
 /// handler based on the parsed command's action field.
+use super::animation::{handle_animate, handle_frame};
 use super::chunked::ChunkAssembler;
 use super::chunked::ChunkResult;
 use super::command::{KittyAction, KittyCommand};
 use super::delete::handle_delete;
+use super::passthrough::build_passthrough_apc;
 use super::query::handle_query;
 use super::store::KittyImageStore;
 use super::transmit::handle_transmit;
@@ -61,16 +63,17 @@ pub fn dispatch_kitty_apc(
     match action {
         KittyAction::TransmitAndDisplay | KittyAction::Transmit => {
             let response = handle_transmit(&cmd, &payload, store);
+            let passthrough_apc = build_passthrough_apc(apc_data);
             DispatchResult {
                 response,
-                passthrough_apc: vec![],
+                passthrough_apc,
             }
         },
         KittyAction::Place => {
-            // Placement handling — actual grid writing deferred to Wave 3
+            let passthrough_apc = build_passthrough_apc(apc_data);
             DispatchResult {
                 response: vec![],
-                passthrough_apc: vec![],
+                passthrough_apc,
             }
         },
         KittyAction::Query => {
@@ -87,11 +90,20 @@ pub fn dispatch_kitty_apc(
                 passthrough_apc: vec![],
             }
         },
-        KittyAction::Frame | KittyAction::Animate => {
-            // Animation support deferred to Task 16
+        KittyAction::Frame => {
+            let response = handle_frame(&cmd, store);
+            let passthrough_apc = build_passthrough_apc(apc_data);
             DispatchResult {
-                response: vec![],
-                passthrough_apc: vec![],
+                response,
+                passthrough_apc,
+            }
+        },
+        KittyAction::Animate => {
+            let response = handle_animate(&cmd, store);
+            let passthrough_apc = build_passthrough_apc(apc_data);
+            DispatchResult {
+                response,
+                passthrough_apc,
             }
         },
     }
@@ -218,5 +230,79 @@ mod tests {
         let result = dispatch_kitty_apc(b"a=T,m=0;VsbG8ga2l0dHk=", &mut store, &mut assembler, 0, 0);
         assert!(result.response.len() > 0);
         assert_eq!(store.image_count(), 1);
+    }
+
+
+    #[test]
+    fn dispatch_transmit_has_passthrough() {
+        let mut store = KittyImageStore::new();
+        let mut assembler = ChunkAssembler::new();
+        let png_b64 = base64::encode(b"PNG");
+        let apc_data = format!("a=T,i=42,f=100;{}", png_b64);
+
+        let result = dispatch_kitty_apc(apc_data.as_bytes(), &mut store, &mut assembler, 0, 0);
+
+        // Passthrough APC should be populated for transmit actions
+        assert!(!result.passthrough_apc.is_empty());
+        assert!(result.passthrough_apc.starts_with(b"\x1b_G"));
+        assert!(result.passthrough_apc.ends_with(b"\x1b\\"));
+    }
+
+    #[test]
+    fn dispatch_query_no_passthrough() {
+        let mut store = KittyImageStore::new();
+        let mut assembler = ChunkAssembler::new();
+
+        let result = dispatch_kitty_apc(b"a=q,i=1", &mut store, &mut assembler, 0, 0);
+
+        // Query should NOT have passthrough
+        assert!(result.passthrough_apc.is_empty());
+    }
+
+    #[test]
+    fn dispatch_delete_no_passthrough() {
+        let mut store = KittyImageStore::new();
+        let mut assembler = ChunkAssembler::new();
+
+        let result = dispatch_kitty_apc(b"a=d,d=A", &mut store, &mut assembler, 0, 0);
+
+        // Delete should NOT have passthrough
+        assert!(result.passthrough_apc.is_empty());
+    }
+
+    #[test]
+    fn dispatch_frame_stores_frame() {
+        let mut store = KittyImageStore::new();
+        let mut assembler = ChunkAssembler::new();
+        use crate::panes::kitty_graphics::store::ImageFormat;
+        store.store(Some(42), ImageFormat::Png, vec![1, 2, 3]);
+
+        let frame_b64 = base64::encode(b"frame_data");
+        let apc_data = format!("a=f,i=42;{}", frame_b64);
+        let result = dispatch_kitty_apc(apc_data.as_bytes(), &mut store, &mut assembler, 0, 0);
+
+        // Frame should be stored
+        assert_eq!(store.get(42).unwrap().frames.len(), 1);
+        // Response should contain OK
+        let resp_str = String::from_utf8_lossy(&result.response);
+        assert!(resp_str.contains("OK"));
+        // Passthrough should be populated
+        assert!(!result.passthrough_apc.is_empty());
+    }
+
+    #[test]
+    fn dispatch_animate_returns_ok() {
+        let mut store = KittyImageStore::new();
+        let mut assembler = ChunkAssembler::new();
+        use crate::panes::kitty_graphics::store::ImageFormat;
+        store.store(Some(42), ImageFormat::Png, vec![1, 2, 3]);
+
+        let result = dispatch_kitty_apc(b"a=a,i=42", &mut store, &mut assembler, 0, 0);
+
+        // Response should contain OK
+        let resp_str = String::from_utf8_lossy(&result.response);
+        assert!(resp_str.contains("OK"));
+        // Passthrough should be populated
+        assert!(!result.passthrough_apc.is_empty());
     }
 }
