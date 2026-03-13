@@ -54,7 +54,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends kitty xvfb
 
       - name: Build zellij
-        run: cargo build --bin zellij
+        run: cargo xtask build
 
       - name: Verify kitty icat inside zellij
         run: |
