@@ -122,24 +122,18 @@ jobs:
           echo "checksum_name=${checksum_name}" >> "$GITHUB_OUTPUT"
 
       - name: Upload release archive
-        uses: actions/upload-release-asset@v1.0.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.make-artifact.outputs.asset_name }}
-          asset_name: zellij-${{matrix.target}}.tar.gz
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_PATH: ${{ steps.make-artifact.outputs.asset_name }}
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" "$ASSET_PATH" --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Upload checksum
-        uses: actions/upload-release-asset@v1.0.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.make-checksum.outputs.checksum_name }}
-          asset_name: zellij-${{matrix.target}}.sha256sum
-          asset_content_type: text/plain
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_PATH: ${{ steps.make-checksum.outputs.checksum_name }}
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" "$ASSET_PATH" --repo "$GITHUB_REPOSITORY" --clobber
 
   build-release-noweb:
     needs: create-release
@@ -217,21 +211,15 @@ jobs:
           echo "checksum_name=${checksum_name}" >> "$GITHUB_OUTPUT"
 
       - name: Upload release archive
-        uses: actions/upload-release-asset@v1.0.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.make-artifact.outputs.asset_name }}
-          asset_name: zellij-no-web-${{matrix.target}}.tar.gz
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_PATH: ${{ steps.make-artifact.outputs.asset_name }}
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" "$ASSET_PATH" --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Upload checksum
-        uses: actions/upload-release-asset@v1.0.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.make-checksum.outputs.checksum_name }}
-          asset_name: zellij-no-web-${{matrix.target}}.sha256sum
-          asset_content_type: text/plain
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_PATH: ${{ steps.make-checksum.outputs.checksum_name }}
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" "$ASSET_PATH" --repo "$GITHUB_REPOSITORY" --clobber
