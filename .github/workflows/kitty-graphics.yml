@@ -54,7 +54,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends kitty xvfb
 
       - name: Build zellij
-        run: cargo xtask build
+        run: |
+          set -euo pipefail
+          cargo xtask build
+          zellij_bin="$(find target -type f -name zellij -perm -111 | head -n1)"
+          if [ -z "$zellij_bin" ]; then
+            echo "Could not find built zellij binary under target/"
+            exit 1
+          fi
+          echo "ZELLIJ_BIN=$zellij_bin" >> "$GITHUB_ENV"
 
       - name: Verify kitty icat inside zellij
         run: |
@@ -68,7 +76,7 @@ jobs:
           rm -f target/kitty-ci/icat.ok target/kitty-ci/check_icat.inner.log
           exec > target/kitty-ci/check_icat.inner.log 2>&1
           set -x
-          ./target/debug/zellij --session kitty-icat-ci --layout compact -- sh -lc '
+          "$ZELLIJ_BIN" --session kitty-icat-ci --layout compact -- sh -lc '
             set -euo pipefail
             sleep 1
             kitty +kitten icat --detect-support target/kitty-ci/smoke.png
