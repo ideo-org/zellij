@@ -1,10 +1,10 @@
 pub mod alacritty_functions;
 pub mod grid;
 pub mod hyperlink_tracker;
+pub mod kitty_graphics;
 pub mod link_handler;
 pub mod selection;
 pub mod sixel;
-pub mod kitty_graphics;
 pub mod terminal_character;
 
 mod active_panes;

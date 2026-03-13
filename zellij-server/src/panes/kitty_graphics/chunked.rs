@@ -113,9 +113,11 @@ impl ChunkAssembler {
             Some(id) if id != 0 => id,
             _ => {
                 // Reuse an existing anonymous in-progress transmission, if one exists.
-                if let Some((id, _)) = self.pending.iter().find(|(_, pending)| {
-                    pending.image_id.is_none() || pending.image_id == Some(0)
-                }) {
+                if let Some((id, _)) = self
+                    .pending
+                    .iter()
+                    .find(|(_, pending)| pending.image_id.is_none() || pending.image_id == Some(0))
+                {
                     return *id;
                 }
 

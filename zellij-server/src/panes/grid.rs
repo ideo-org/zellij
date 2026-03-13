@@ -1,6 +1,6 @@
-use super::sixel::{PixelRect, SixelGrid, SixelImageStore};
 use super::kitty_graphics::chunked::ChunkAssembler;
 use super::kitty_graphics::store::KittyImageStore;
+use super::sixel::{PixelRect, SixelGrid, SixelImageStore};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;

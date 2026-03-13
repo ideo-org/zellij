@@ -216,7 +216,12 @@ impl KittyImageStore {
 
     /// Store an image and immediately evict LRU images if over limit.
     /// Returns (assigned_id, evicted_ids).
-    pub fn store_with_eviction(&mut self, id: Option<u32>, format: ImageFormat, data: Vec<u8>) -> (u32, Vec<u32>) {
+    pub fn store_with_eviction(
+        &mut self,
+        id: Option<u32>,
+        format: ImageFormat,
+        data: Vec<u8>,
+    ) -> (u32, Vec<u32>) {
         let assigned_id = self.store(id, format, data);
         let evicted = self.evict_lru_if_needed();
         (assigned_id, evicted)

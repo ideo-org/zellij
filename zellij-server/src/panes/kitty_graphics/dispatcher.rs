@@ -232,7 +232,6 @@ mod tests {
         assert_eq!(store.image_count(), 1);
     }
 
-
     #[test]
     fn dispatch_transmit_has_passthrough() {
         let mut store = KittyImageStore::new();
