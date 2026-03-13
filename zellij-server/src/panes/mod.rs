@@ -4,6 +4,7 @@ pub mod hyperlink_tracker;
 pub mod link_handler;
 pub mod selection;
 pub mod sixel;
+pub mod kitty_graphics;
 pub mod terminal_character;
 
 mod active_panes;

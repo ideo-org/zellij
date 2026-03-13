@@ -1,4 +1,6 @@
 use super::sixel::{PixelRect, SixelGrid, SixelImageStore};
+use super::kitty_graphics::chunked::ChunkAssembler;
+use super::kitty_graphics::store::KittyImageStore;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -526,6 +528,8 @@ pub struct Grid {
     pub supports_kitty_keyboard_protocol: bool, // has the app requested kitty keyboard support?
     explicitly_disable_kitty_keyboard_protocol: bool, // has kitty keyboard support been explicitly
     // disabled by user config?
+    pub(crate) kitty_image_store: Rc<RefCell<KittyImageStore>>,
+    pub(crate) kitty_chunk_assembler: ChunkAssembler,
     click: Click,
     hyperlink_tracker: HyperlinkTracker,
     pub pane_default_fg: Option<AnsiCode>,
@@ -810,6 +814,8 @@ impl Grid {
             lock_renders: false,
             supports_kitty_keyboard_protocol: false,
             explicitly_disable_kitty_keyboard_protocol,
+            kitty_image_store: Rc::new(RefCell::new(KittyImageStore::new())),
+            kitty_chunk_assembler: ChunkAssembler::new(),
             click: Click::default(),
             hyperlink_tracker: HyperlinkTracker::new(),
             pane_default_fg: None,
@@ -818,6 +824,9 @@ impl Grid {
             hover_position: None,
             cached_hover_tooltip: None,
         }
+    }
+    pub fn kitty_image_store(&self) -> &Rc<RefCell<KittyImageStore>> {
+        &self.kitty_image_store
     }
     pub fn render_full_viewport(&mut self) {
         self.output_buffer.update_all_lines();
