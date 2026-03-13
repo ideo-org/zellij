@@ -1,4 +1,4 @@
-use crate::output::{CharacterChunk, SixelImageChunk};
+﻿use crate::output::{CharacterChunk, SixelImageChunk};
 use crate::panes::kitty_graphics::apc_parser::{ApcParser, ApcParserResult};
 use crate::panes::kitty_graphics::dispatcher::dispatch_kitty_apc;
 use crate::panes::sixel::SixelImageStore;
@@ -216,10 +216,7 @@ impl Pane for TerminalPane {
                 },
                 ApcParserResult::Complete(apc_data) => {
                     // Complete APC captured — dispatch to kitty handler
-let (cursor_y, cursor_x) = self
-.grid
-.cursor_coordinates()
-.unwrap_or((0, 0));
+                    let (cursor_y, cursor_x) = self.grid.cursor_coordinates().unwrap_or((0, 0));
                     let result = dispatch_kitty_apc(
                         &apc_data,
                         &mut self.grid.kitty_image_store.borrow_mut(),
@@ -231,7 +228,9 @@ let (cursor_y, cursor_x) = self
                         self.grid.pending_messages_to_pty.push(result.response);
                     }
                     if !result.passthrough_apc.is_empty() {
-                        self.grid.pending_messages_to_pty.push(result.passthrough_apc);
+                        self.grid
+                            .pending_messages_to_pty
+                            .push(result.passthrough_apc);
                     }
                 },
                 ApcParserResult::Aborted(bytes) => {

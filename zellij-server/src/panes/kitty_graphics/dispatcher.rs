@@ -1,4 +1,4 @@
-/// Kitty graphics protocol APC dispatch logic.
+﻿/// Kitty graphics protocol APC dispatch logic.
 ///
 /// Routes a complete APC payload (captured by ApcParser) to the correct
 /// handler based on the parsed command's action field.
@@ -227,7 +227,8 @@ mod tests {
         assert!(result.response.is_empty());
         assert_eq!(store.image_count(), 0);
 
-        let result = dispatch_kitty_apc(b"a=T,m=0;VsbG8ga2l0dHk=", &mut store, &mut assembler, 0, 0);
+        let result =
+            dispatch_kitty_apc(b"a=T,m=0;VsbG8ga2l0dHk=", &mut store, &mut assembler, 0, 0);
         assert!(result.response.len() > 0);
         assert_eq!(store.image_count(), 1);
     }

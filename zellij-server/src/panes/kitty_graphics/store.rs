@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -186,7 +186,9 @@ impl KittyImageStore {
     /// Remove an image only if it has no active placements.
     /// Returns true if the image was removed.
     pub fn remove_if_no_placements(&mut self, image_id: u32) -> bool {
-        let should_remove = self.images.get(&image_id)
+        let should_remove = self
+            .images
+            .get(&image_id)
             .map(|img| img.placements.is_empty())
             .unwrap_or(false);
         if should_remove {
