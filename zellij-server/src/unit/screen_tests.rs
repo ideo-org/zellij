@@ -1510,15 +1510,17 @@ fn update_screen_pixel_dimensions_resizes_existing_terminal_panes_with_pixel_siz
     std::thread::sleep(std::time::Duration::from_millis(100));
     received_pty_instructions.lock().unwrap().clear();
 
-    let _ = mock_screen.to_screen.send(ScreenInstruction::TerminalPixelDimensions(
-        PixelDimensions {
-            character_cell_size: Some(SizeInPixels {
-                height: 10,
-                width: 5,
-            }),
-            text_area_size: None,
-        },
-    ));
+    let _ = mock_screen
+        .to_screen
+        .send(ScreenInstruction::TerminalPixelDimensions(
+            PixelDimensions {
+                character_cell_size: Some(SizeInPixels {
+                    height: 10,
+                    width: 5,
+                }),
+                text_area_size: None,
+            },
+        ));
 
     std::thread::sleep(std::time::Duration::from_millis(100));
     mock_screen.teardown(vec![pty_writer_thread, screen_thread]);
@@ -1539,11 +1541,7 @@ fn update_screen_pixel_dimensions_resizes_existing_terminal_panes_with_pixel_siz
     );
     let (terminal_id, cols, rows, width_in_pixels, height_in_pixels) = resize_with_pixels.unwrap();
     assert_eq!(terminal_id, 0, "the existing terminal pane was resized");
-    assert_eq!(
-        width_in_pixels,
-        cols * 5,
-        "pane width propagated in pixels"
-    );
+    assert_eq!(width_in_pixels, cols * 5, "pane width propagated in pixels");
     assert_eq!(
         height_in_pixels,
         rows * 10,

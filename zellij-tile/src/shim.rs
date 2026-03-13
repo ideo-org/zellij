@@ -2785,7 +2785,13 @@ pub fn clear_pane_highlights(pane_id: PaneId) {
     unsafe { host_run_plugin_command() };
 }
 
+#[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "zellij")]
 extern "C" {
     fn host_run_plugin_command();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+unsafe fn host_run_plugin_command() {
+    panic!("`host_run_plugin_command` is only available in the Zellij plugin host environment")
 }
