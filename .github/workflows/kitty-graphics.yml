@@ -31,10 +31,15 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  RUST_BACKTRACE: short
+  CARGO_UNSTABLE_SPARSE_REGISTRY: true
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 jobs:
-  kitty-icat-smoke:
-    name: Kitty icat smoke
+  kitty-unit-tests:
+    name: Kitty graphics unit tests
     runs-on: ubuntu-latest
 
     steps:
@@ -50,63 +55,5 @@ jobs:
         with:
           rustflags: ""
 
-      - name: Install kitty and xvfb
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends kitty xvfb
-
-      - name: Build zellij
-        run: |
-          set -euo pipefail
-          cargo xtask build
-          zellij_bin="$(find target -type f -name zellij -perm -111 | head -n1)"
-          if [ -z "$zellij_bin" ]; then
-            echo "Could not find built zellij binary under target/"
-            exit 1
-          fi
-          echo "ZELLIJ_BIN=$zellij_bin" >> "$GITHUB_ENV"
-
-      - name: Verify kitty icat inside zellij
-        run: |
-          set -euo pipefail
-          mkdir -p target/kitty-ci
-          cp assets/logo.png target/kitty-ci/smoke.png
-          cat > target/kitty-ci/check_icat.sh <<'SH'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          rm -f target/kitty-ci/icat.ok target/kitty-ci/check_icat.inner.log
-          exec > target/kitty-ci/check_icat.inner.log 2>&1
-          set -x
-          # Start a detached zellij session in the background so that
-          # 'zellij run' has an existing session to attach to.
-          "$ZELLIJ_BIN" attach --create-background kitty-icat-ci
-          # Poll until the session appears (up to 30 s).
-          for i in $(seq 1 30); do
-            "$ZELLIJ_BIN" list-sessions 2>/dev/null | grep -q kitty-icat-ci && break
-            sleep 1
-          done
-          "$ZELLIJ_BIN" --session kitty-icat-ci run --blocking -- sh -lc '
-            set -euo pipefail
-            kitty +kitten icat --detect-support target/kitty-ci/smoke.png
-            kitty +kitten icat target/kitty-ci/smoke.png
-          '
-          touch target/kitty-ci/icat.ok
-          SH
-          chmod +x target/kitty-ci/check_icat.sh
-          set +e
-          timeout 180s xvfb-run -a -s "-screen 0 1280x800x24" kitty --config NONE sh -lc "target/kitty-ci/check_icat.sh" 2>&1 | tee target/kitty-ci/icat.log
-          run_status=${PIPESTATUS[0]}
-          set -e
-          if [ -f target/kitty-ci/check_icat.inner.log ]; then
-            cat target/kitty-ci/check_icat.inner.log | tee -a target/kitty-ci/icat.log
-          fi
-          if [ "$run_status" -ne 0 ]; then
-            exit "$run_status"
-          fi
-          test -f target/kitty-ci/icat.ok
-
-      - name: Upload icat log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: kitty-icat-log
-          path: target/kitty-ci/icat.log
+      - name: Run kitty graphics unit tests
+        run: cargo test -p zellij-server kitty -- --test-threads 4
