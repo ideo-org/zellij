@@ -219,7 +219,7 @@ pub(crate) fn stdin_loop(
                                 .unwrap()
                                 .write_cache(ansi_stdin_events.drain(..).collect());
                         }
-                        current_buffer.append(&mut bytes_to_process);
+                        current_buffer.extend_from_slice(&bytes_to_process);
 
                         if !explicitly_disable_kitty_keyboard_protocol {
                             // first we try to parse with the KittyKeyboardParser
