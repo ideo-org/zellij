@@ -78,10 +78,10 @@ impl<'a> PaneContentsAndUi<'a> {
         // and we can clear them from the UI below
         drop(self.pane.drain_fake_cursors());
 
+        let clients: Vec<ClientId> = clients.collect();
         if let Some((character_chunks, raw_vte_output, sixel_image_chunks)) =
             self.pane.render(None).context(err_context)?
         {
-            let clients: Vec<ClientId> = clients.collect();
             self.output
                 .add_character_chunks_to_multiple_clients(
                     character_chunks,
@@ -107,6 +107,14 @@ impl<'a> PaneContentsAndUi<'a> {
                     );
                 }
             }
+        }
+        // Drain Kitty graphics passthrough APCs and forward to host terminal
+        let kitty_passthrough = self.pane.take_pending_kitty_passthrough();
+        for apc in kitty_passthrough {
+            self.output.add_pre_vte_instruction_to_multiple_clients(
+                clients.iter().copied(),
+                &String::from_utf8_lossy(&apc),
+            );
         }
         Ok(())
     }

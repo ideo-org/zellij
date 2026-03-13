@@ -403,6 +403,9 @@ pub trait Pane {
         // we should probably refactor away from this trait at some point
         vec![]
     }
+    fn take_pending_kitty_passthrough(&mut self) -> Vec<Vec<u8>> {
+        vec![]
+    }
     fn drain_clipboard_update(&mut self) -> Option<String> {
         None
     }

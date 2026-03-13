@@ -156,6 +156,7 @@ pub struct TerminalPane {
     arrow_fonts: bool,
     notification_end: Option<NotificationEnd>,
     apc_parser: ApcParser,
+    pending_kitty_passthrough: Vec<Vec<u8>>,
 }
 
 impl Pane for TerminalPane {
@@ -228,9 +229,7 @@ impl Pane for TerminalPane {
                         self.grid.pending_messages_to_pty.push(result.response);
                     }
                     if !result.passthrough_apc.is_empty() {
-                        self.grid
-                            .pending_messages_to_pty
-                            .push(result.passthrough_apc);
+                        self.pending_kitty_passthrough.push(result.passthrough_apc);
                     }
                 },
                 ApcParserResult::Aborted(bytes) => {
@@ -619,6 +618,10 @@ impl Pane for TerminalPane {
     }
     fn drain_messages_to_pty(&mut self) -> Vec<Vec<u8>> {
         self.grid.pending_messages_to_pty.drain(..).collect()
+    }
+
+    fn take_pending_kitty_passthrough(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.pending_kitty_passthrough)
     }
 
     fn drain_clipboard_update(&mut self) -> Option<String> {
@@ -1084,6 +1087,7 @@ impl TerminalPane {
             geom_override: None,
             vte_parser: vte::Parser::new(),
             apc_parser: ApcParser::new(),
+            pending_kitty_passthrough: Vec::new(),
             active_at: Instant::now(),
             style,
             selection_scrolled_at: time::Instant::now(),
@@ -1291,6 +1295,13 @@ impl TerminalPane {
             self.remove_banner();
             AdjustedInput::DropToShellInThisPane { working_dir }
         })
+    }
+}
+
+impl Drop for TerminalPane {
+    fn drop(&mut self) {
+        use crate::panes::kitty_graphics::lifecycle::cleanup_on_close;
+        cleanup_on_close(&mut self.grid.kitty_image_store.borrow_mut());
     }
 }
 
