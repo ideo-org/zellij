@@ -17,14 +17,34 @@ jobs:
     steps:
       - name: create_release
         id: create_release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
-          release_name: Release ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
-          prerelease: ${{ github.event_name != 'workflow_dispatch' && contains(github.ref_name, '-') }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
+          RELEASE_NAME: Release ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
+          IS_DRAFT: ${{ github.event_name == 'workflow_dispatch' }}
+          IS_PRERELEASE: ${{ github.event_name != 'workflow_dispatch' && contains(github.ref_name, '-') }}
+        shell: bash
+        run: |
+          draft_flag=()
+          prerelease_flag=()
+          if [ "$IS_DRAFT" = "true" ]; then
+            draft_flag+=(--draft)
+          fi
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            prerelease_flag+=(--prerelease)
+          fi
+
+          if ! gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_NAME" \
+              "${draft_flag[@]}" \
+              "${prerelease_flag[@]}" \
+              --notes ''
+          fi
+
+          upload_url="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" --jq '.upload_url')"
+          echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
 
   build-release-normal:
     needs: create-release
