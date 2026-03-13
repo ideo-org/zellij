@@ -301,6 +301,16 @@ fn finalize_events(
         },
         false,
     );
+    if events.is_empty() {
+        if !current_buffer.is_empty() {
+            send_input_instructions
+                .send(InputInstruction::RawBytes(
+                    current_buffer.drain(..).collect(),
+                ))
+                .unwrap();
+        }
+        return;
+    }
     for input_event in events {
         send_input_instructions
             .send(InputInstruction::KeyEvent(

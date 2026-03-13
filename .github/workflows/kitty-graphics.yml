@@ -60,10 +60,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p target/kitty-ci
-          printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5M8p0AAAAASUVORK5CYII=' | base64 -d > target/kitty-ci/smoke.png
+          cp assets/logo.png target/kitty-ci/smoke.png
           cat > target/kitty-ci/check_icat.sh <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
+          set -x
           cd "$GITHUB_WORKSPACE"
           rm -f target/kitty-ci/icat.ok
           ./target/debug/zellij --session kitty-icat-ci --layout compact -- sh -lc '
@@ -74,7 +75,13 @@ jobs:
           touch target/kitty-ci/icat.ok
           SH
           chmod +x target/kitty-ci/check_icat.sh
-          timeout 180s xvfb-run -a -s "-screen 0 1280x800x24" kitty --config NONE sh -lc "target/kitty-ci/check_icat.sh" > target/kitty-ci/icat.log 2>&1
+          set +e
+          timeout 180s xvfb-run -a -s "-screen 0 1280x800x24" kitty --config NONE sh -lc "target/kitty-ci/check_icat.sh" 2>&1 | tee target/kitty-ci/icat.log
+          run_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$run_status" -ne 0 ]; then
+            exit "$run_status"
+          fi
           test -f target/kitty-ci/icat.ok
 
       - name: Upload icat log on failure
