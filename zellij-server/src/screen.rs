@@ -1731,6 +1731,7 @@ impl Screen {
     }
 
     pub fn update_pixel_dimensions(&mut self, pixel_dimensions: PixelDimensions) {
+        let previous_character_cell_size = self.character_cell_size.borrow().clone();
         self.pixel_dimensions.merge(pixel_dimensions);
         if let Some(character_cell_size) = self.pixel_dimensions.character_cell_size {
             *self.character_cell_size.borrow_mut() = Some(character_cell_size);
@@ -1742,6 +1743,18 @@ impl Screen {
                 width: character_cell_size_width,
             };
             *self.character_cell_size.borrow_mut() = Some(character_cell_size);
+        }
+        let current_character_cell_size = self.character_cell_size.borrow().clone();
+        if current_character_cell_size.is_some()
+            && current_character_cell_size != previous_character_cell_size
+        {
+            let err_context =
+                || "failed to propagate terminal pixel dimensions to existing panes".to_owned();
+            for tab in self.tabs.values_mut() {
+                tab.resize_whole_tab(self.size)
+                    .with_context(err_context)
+                    .non_fatal();
+            }
         }
     }
 

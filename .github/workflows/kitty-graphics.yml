@@ -1,0 +1,85 @@
+name: Kitty Graphics
+
+on:
+  push:
+    paths:
+      - ".github/workflows/kitty-graphics.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "zellij-client/src/stdin_handler.rs"
+      - "zellij-server/src/panes/grid.rs"
+      - "zellij-server/src/panes/terminal_pane.rs"
+      - "zellij-server/src/panes/kitty_graphics/**"
+      - "zellij-server/src/panes/unit/grid_tests.rs"
+      - "zellij-server/src/panes/unit/terminal_pane_tests.rs"
+      - "zellij-server/src/screen.rs"
+      - "zellij-server/src/unit/screen_tests.rs"
+  pull_request:
+    paths:
+      - ".github/workflows/kitty-graphics.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "zellij-client/src/stdin_handler.rs"
+      - "zellij-server/src/panes/grid.rs"
+      - "zellij-server/src/panes/terminal_pane.rs"
+      - "zellij-server/src/panes/kitty_graphics/**"
+      - "zellij-server/src/panes/unit/grid_tests.rs"
+      - "zellij-server/src/panes/unit/terminal_pane_tests.rs"
+      - "zellij-server/src/screen.rs"
+      - "zellij-server/src/unit/screen_tests.rs"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  kitty-icat-smoke:
+    name: Kitty icat smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
+
+      - name: Install kitty and xvfb
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends kitty xvfb
+
+      - name: Build zellij
+        run: cargo build --bin zellij
+
+      - name: Verify kitty icat inside zellij
+        run: |
+          set -euo pipefail
+          mkdir -p target/kitty-ci
+          printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5M8p0AAAAASUVORK5CYII=' | base64 -d > target/kitty-ci/smoke.png
+          cat > target/kitty-ci/check_icat.sh <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          rm -f target/kitty-ci/icat.ok
+          ./target/debug/zellij --session kitty-icat-ci --layout compact -- sh -lc '
+            set -euo pipefail
+            kitty +kitten icat --detect-support target/kitty-ci/smoke.png
+            kitty +kitten icat target/kitty-ci/smoke.png
+          '
+          touch target/kitty-ci/icat.ok
+          SH
+          chmod +x target/kitty-ci/check_icat.sh
+          timeout 180s xvfb-run -a -s "-screen 0 1280x800x24" kitty --config NONE sh -lc "target/kitty-ci/check_icat.sh" > target/kitty-ci/icat.log 2>&1
+          test -f target/kitty-ci/icat.ok
+
+      - name: Upload icat log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kitty-icat-log
+          path: target/kitty-ci/icat.log
