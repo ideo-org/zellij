@@ -2,7 +2,7 @@ use axum::extract::ws::Message;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::AtomicBool,
     Arc, Mutex,
 };
 use tokio::sync::mpsc::UnboundedSender;

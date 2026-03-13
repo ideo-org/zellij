@@ -76,9 +76,16 @@ jobs:
           rm -f target/kitty-ci/icat.ok target/kitty-ci/check_icat.inner.log
           exec > target/kitty-ci/check_icat.inner.log 2>&1
           set -x
-          "$ZELLIJ_BIN" --session kitty-icat-ci run -- sh -lc '
-            set -euo pipefail
+          # Start a detached zellij session in the background so that
+          # 'zellij run' has an existing session to attach to.
+          "$ZELLIJ_BIN" attach --create-background kitty-icat-ci
+          # Poll until the session appears (up to 30 s).
+          for i in $(seq 1 30); do
+            "$ZELLIJ_BIN" list-sessions 2>/dev/null | grep -q kitty-icat-ci && break
             sleep 1
+          done
+          "$ZELLIJ_BIN" --session kitty-icat-ci run --blocking -- sh -lc '
+            set -euo pipefail
             kitty +kitten icat --detect-support target/kitty-ci/smoke.png
             kitty +kitten icat target/kitty-ci/smoke.png
           '
