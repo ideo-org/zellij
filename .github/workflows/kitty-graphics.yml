@@ -64,11 +64,13 @@ jobs:
           cat > target/kitty-ci/check_icat.sh <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
-          set -x
           cd "$GITHUB_WORKSPACE"
-          rm -f target/kitty-ci/icat.ok
+          rm -f target/kitty-ci/icat.ok target/kitty-ci/check_icat.inner.log
+          exec > target/kitty-ci/check_icat.inner.log 2>&1
+          set -x
           ./target/debug/zellij --session kitty-icat-ci --layout compact -- sh -lc '
             set -euo pipefail
+            sleep 1
             kitty +kitten icat --detect-support target/kitty-ci/smoke.png
             kitty +kitten icat target/kitty-ci/smoke.png
           '
@@ -79,6 +81,9 @@ jobs:
           timeout 180s xvfb-run -a -s "-screen 0 1280x800x24" kitty --config NONE sh -lc "target/kitty-ci/check_icat.sh" 2>&1 | tee target/kitty-ci/icat.log
           run_status=${PIPESTATUS[0]}
           set -e
+          if [ -f target/kitty-ci/check_icat.inner.log ]; then
+            cat target/kitty-ci/check_icat.inner.log | tee -a target/kitty-ci/icat.log
+          fi
           if [ "$run_status" -ne 0 ]; then
             exit "$run_status"
           fi

@@ -44,6 +44,7 @@ pub struct StdinAnsiParser {
     raw_buffer: Vec<u8>,
     pending_color_sequences: Vec<(usize, String)>,
     pending_events: Vec<AnsiStdinInstruction>,
+    pending_unparsed_bytes: Vec<u8>,
     parse_deadline: Option<Instant>,
 }
 
@@ -53,6 +54,7 @@ impl StdinAnsiParser {
             raw_buffer: vec![],
             pending_color_sequences: vec![],
             pending_events: vec![],
+            pending_unparsed_bytes: vec![],
             parse_deadline: None,
         }
     }
@@ -98,6 +100,9 @@ impl StdinAnsiParser {
     }
     pub fn startup_query_duration(&self) -> u64 {
         STARTUP_PARSE_DEADLINE_MS
+    }
+    pub fn drain_pending_unparsed_bytes(&mut self) -> Vec<u8> {
+        self.pending_unparsed_bytes.drain(..).collect()
     }
     pub fn parse(&mut self, mut raw_bytes: Vec<u8>) -> Vec<AnsiStdinInstruction> {
         for byte in raw_bytes.drain(..) {
@@ -146,7 +151,7 @@ impl StdinAnsiParser {
                     self.raw_buffer.clear();
                 },
                 Err(_) => {
-                    self.raw_buffer.clear();
+                    self.pending_unparsed_bytes.append(&mut self.raw_buffer);
                 },
             }
         } else if byte == b'\\' {
@@ -161,7 +166,7 @@ impl StdinAnsiParser {
                 self.pending_color_sequences
                     .push((color_register, color_sequence));
             } else {
-                self.raw_buffer.clear();
+                self.pending_unparsed_bytes.append(&mut self.raw_buffer);
             }
         } else if byte == b'y' {
             self.raw_buffer.push(byte);
@@ -170,6 +175,8 @@ impl StdinAnsiParser {
             {
                 self.pending_events.push(ansi_sequence);
                 self.raw_buffer.clear();
+            } else {
+                self.pending_unparsed_bytes.append(&mut self.raw_buffer);
             }
         } else {
             self.raw_buffer.push(byte);
