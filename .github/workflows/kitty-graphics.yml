@@ -76,7 +76,7 @@ jobs:
           rm -f target/kitty-ci/icat.ok target/kitty-ci/check_icat.inner.log
           exec > target/kitty-ci/check_icat.inner.log 2>&1
           set -x
-          "$ZELLIJ_BIN" --session kitty-icat-ci --layout compact -- sh -lc '
+          "$ZELLIJ_BIN" --session kitty-icat-ci run -- sh -lc '
             set -euo pipefail
             sleep 1
             kitty +kitten icat --detect-support target/kitty-ci/smoke.png
