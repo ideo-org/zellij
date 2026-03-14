@@ -17,6 +17,7 @@ pub fn should_passthrough(action: &KittyAction) -> bool {
         KittyAction::TransmitAndDisplay
             | KittyAction::Transmit
             | KittyAction::Place
+            | KittyAction::Delete
             | KittyAction::Frame
             | KittyAction::Animate
     )
@@ -49,8 +50,12 @@ mod tests {
     }
 
     #[test]
-    fn should_not_passthrough_query_delete() {
+    fn should_not_passthrough_query_only() {
         assert!(!should_passthrough(&KittyAction::Query));
-        assert!(!should_passthrough(&KittyAction::Delete));
+    }
+
+    #[test]
+    fn should_passthrough_delete() {
+        assert!(should_passthrough(&KittyAction::Delete));
     }
 }

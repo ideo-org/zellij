@@ -1054,8 +1054,9 @@ pub fn kitty_apc_mixed_with_regular_bytes() {
 }
 
 #[test]
-pub fn kitty_delete_apc_does_not_produce_passthrough() {
-    // Verify that a delete APC (a=d) is handled locally and does not produce passthrough.
+pub fn kitty_delete_apc_produces_passthrough_for_host_cleanup() {
+    // Verify that a delete APC (a=d) produces passthrough bytes so the host
+    // terminal also removes the image (prevents stuck images).
     let mut pane = make_terminal_pane(80, 24);
 
     // First transmit an image
@@ -1068,11 +1069,11 @@ pub fn kitty_delete_apc_does_not_produce_passthrough() {
     let delete = kitty_apc("a=d,d=I,i=5");
     pane.handle_pty_bytes(delete);
 
-    // Delete should not produce passthrough
+    // Delete SHOULD produce passthrough to forward to host terminal
     let passthrough = pane.take_pending_kitty_passthrough();
     assert!(
-        passthrough.is_empty(),
-        "delete APC should not produce passthrough bytes"
+        !passthrough.is_empty(),
+        "delete APC should produce passthrough bytes for host terminal cleanup"
     );
 }
 
@@ -1145,4 +1146,47 @@ pub fn kitty_take_pending_passthrough_is_idempotent() {
     );
     assert!(second.is_empty(), "second drain should be empty");
     assert!(third.is_empty(), "third drain should be empty");
+}
+
+#[test]
+pub fn kitty_query_with_payload_responds_ok_for_icat_detection() {
+    // kitty icat --detect-support sends a=q with payload data (a small test image).
+    // The terminal must transmit the test image first, then respond OK.
+    // Without this, kitty icat reports "terminal does not support graphics protocol".
+    let mut pane = make_terminal_pane(80, 24);
+
+    // Simulate kitty icat detection: a=q with image data
+    // i=31, s=1, v=1, f=24 (RGB), t=d (direct), a=q (query)
+    // payload is 3 bytes of RGB (1 pixel) base64-encoded = "AAAA"
+    let apc = kitty_apc("a=q,i=31,s=1,v=1,t=d,f=24;AAAA");
+    pane.handle_pty_bytes(apc);
+
+    // Response should contain OK (not ENOENT)
+    let pty_msgs = pane.drain_messages_to_pty();
+    assert!(
+        !pty_msgs.is_empty(),
+        "query with payload should produce a response"
+    );
+    let response_str = pty_msgs
+        .iter()
+        .map(|m| String::from_utf8_lossy(m).to_string())
+        .collect::<Vec<_>>()
+        .join("");
+    assert!(
+        response_str.contains("OK"),
+        "query with payload must respond OK for kitty icat detection, got: {:?}",
+        response_str
+    );
+    assert!(
+        !response_str.contains("ENOENT"),
+        "query with payload must NOT respond ENOENT, got: {:?}",
+        response_str
+    );
+
+    // Passthrough should also be produced (image data forwarded to host terminal)
+    let passthrough = pane.take_pending_kitty_passthrough();
+    assert!(
+        !passthrough.is_empty(),
+        "query with payload should produce passthrough for host terminal"
+    );
 }

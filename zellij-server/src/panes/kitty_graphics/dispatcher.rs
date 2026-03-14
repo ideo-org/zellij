@@ -77,17 +77,30 @@ pub fn dispatch_kitty_apc(
             }
         },
         KittyAction::Query => {
-            let response = handle_query(&cmd, store);
-            DispatchResult {
-                response,
-                passthrough_apc: vec![],
+            // If query includes payload data (e.g. kitty icat --detect-support),
+            // transmit the test image first so the store has it, then respond OK.
+            if !payload.is_empty() {
+                let _ = handle_transmit(&cmd, &payload, store);
+                let passthrough_apc = build_passthrough_apc(apc_data);
+                let response = handle_query(&cmd, store);
+                DispatchResult {
+                    response,
+                    passthrough_apc,
+                }
+            } else {
+                let response = handle_query(&cmd, store);
+                DispatchResult {
+                    response,
+                    passthrough_apc: vec![],
+                }
             }
         },
         KittyAction::Delete => {
             let _result = handle_delete(&cmd, store, cursor_row, cursor_col);
+            let passthrough_apc = build_passthrough_apc(apc_data);
             DispatchResult {
                 response: vec![],
-                passthrough_apc: vec![],
+                passthrough_apc,
             }
         },
         KittyAction::Frame => {
@@ -260,14 +273,15 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_delete_no_passthrough() {
+    fn dispatch_delete_has_passthrough() {
         let mut store = KittyImageStore::new();
         let mut assembler = ChunkAssembler::new();
 
         let result = dispatch_kitty_apc(b"a=d,d=A", &mut store, &mut assembler, 0, 0);
 
-        // Delete should NOT have passthrough
-        assert!(result.passthrough_apc.is_empty());
+        // Delete SHOULD have passthrough to tell host terminal to remove images
+        assert!(!result.passthrough_apc.is_empty());
+        assert!(result.passthrough_apc.starts_with(b"\x1b_G"));
     }
 
     #[test]
