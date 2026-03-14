@@ -79,20 +79,14 @@ pub fn dispatch_kitty_apc(
         KittyAction::Query => {
             // If query includes payload data (e.g. kitty icat --detect-support),
             // transmit the test image first so the store has it, then respond OK.
+            // No passthrough for queries — responses are generated locally.
             if !payload.is_empty() {
                 let _ = handle_transmit(&cmd, &payload, store);
-                let passthrough_apc = build_passthrough_apc(apc_data);
-                let response = handle_query(&cmd, store);
-                DispatchResult {
-                    response,
-                    passthrough_apc,
-                }
-            } else {
-                let response = handle_query(&cmd, store);
-                DispatchResult {
-                    response,
-                    passthrough_apc: vec![],
-                }
+            }
+            let response = handle_query(&cmd, store);
+            DispatchResult {
+                response,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Delete => {

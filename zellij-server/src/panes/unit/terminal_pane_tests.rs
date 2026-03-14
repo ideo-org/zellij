@@ -1183,10 +1183,10 @@ pub fn kitty_query_with_payload_responds_ok_for_icat_detection() {
         response_str
     );
 
-    // Passthrough should also be produced (image data forwarded to host terminal)
+    // Query should NOT produce passthrough (handled locally to avoid double response)
     let passthrough = pane.take_pending_kitty_passthrough();
     assert!(
-        !passthrough.is_empty(),
-        "query with payload should produce passthrough for host terminal"
+        passthrough.is_empty(),
+        "query should not produce passthrough (local response only)"
     );
 }
