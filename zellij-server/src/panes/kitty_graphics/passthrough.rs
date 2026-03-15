@@ -82,7 +82,7 @@ mod tests {
         // Only Transmit actions should be forwarded to host terminal
         assert!(should_passthrough(&KittyAction::TransmitAndDisplay));
         assert!(should_passthrough(&KittyAction::Transmit));
-        
+
         // All other actions are handled locally by Zellij
         assert!(!should_passthrough(&KittyAction::Place));
         assert!(!should_passthrough(&KittyAction::Query));

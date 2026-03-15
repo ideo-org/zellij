@@ -241,13 +241,14 @@ impl KittyCommand {
                 cmd.quiet = q as u8;
             },
             b'd' => {
+                // Kitty protocol uses uppercase letters - be strict per spec
                 cmd.delete_target = Some(match value {
-                    "A" | "a" => DeleteTarget::All,
-                    "I" | "i" => DeleteTarget::ById,
-                    "P" | "p" => DeleteTarget::ByPlacement,
-                    "C" | "c" => DeleteTarget::AtCursor,
-                    "R" | "r" => DeleteTarget::InRange,
-                    "Z" | "z" => DeleteTarget::ByZIndex,
+                    "A" => DeleteTarget::All,
+                    "I" => DeleteTarget::ById,
+                    "P" => DeleteTarget::ByPlacement,
+                    "C" => DeleteTarget::AtCursor,
+                    "R" => DeleteTarget::InRange,
+                    "Z" => DeleteTarget::ByZIndex,
                     _ => return Err(format!("unknown delete target: '{}'", value)),
                 });
             },

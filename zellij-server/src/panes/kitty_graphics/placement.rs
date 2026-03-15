@@ -72,6 +72,23 @@ pub fn handle_place(
         return Err(PlaceError::InvalidDimensions);
     }
 
+    // Bounds check: prevent excessive memory allocation or overflow
+    // Reasonable limits: 10,000 cells per dimension, 100M total cells
+    const MAX_DIMENSION: u32 = 10_000;
+    const MAX_TOTAL_CELLS: u64 = 100_000_000;
+
+    if columns > MAX_DIMENSION || rows > MAX_DIMENSION {
+        return Err(PlaceError::InvalidDimensions);
+    }
+
+    let total_cells = (columns as u64)
+        .checked_mul(rows as u64)
+        .ok_or(PlaceError::InvalidDimensions)?;
+
+    if total_cells > MAX_TOTAL_CELLS {
+        return Err(PlaceError::InvalidDimensions);
+    }
+
     // Build the 2D grid of placeholder cells
     let mut cells = Vec::with_capacity(rows as usize);
     for row in 0..rows {

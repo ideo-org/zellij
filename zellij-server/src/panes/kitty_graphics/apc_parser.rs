@@ -104,6 +104,17 @@ impl ApcParser {
                     let payload = std::mem::take(&mut self.buffer);
                     self.state = State::Normal;
                     ApcParserResult::Complete(payload)
+                } else if byte == 0x1B {
+                    // Consecutive ESC: first ESC is data, second ESC might be start of new terminator
+                    self.buffer.push(0x1B);
+                    // Stay in ApcEscSeen state for the new ESC
+                    if self.buffer.len() > self.max_size {
+                        let aborted = std::mem::take(&mut self.buffer);
+                        self.state = State::Normal;
+                        ApcParserResult::Aborted(aborted)
+                    } else {
+                        ApcParserResult::Collecting
+                    }
                 } else {
                     // ESC was just data inside the payload, not a terminator
                     self.buffer.push(0x1B);

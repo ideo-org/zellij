@@ -33,11 +33,24 @@ pub fn decode_kitty_payload(data: &[u8], compression: Compression) -> Result<Vec
     match compression {
         Compression::None => Ok(decoded),
         Compression::Zlib => {
+            // Limit decompression to prevent zip bomb attacks
+            // Max 100MB decompressed size (reasonable for terminal graphics)
+            const MAX_DECOMPRESSED_SIZE: u64 = 100 * 1024 * 1024;
+
             let mut decoder = ZlibDecoder::new(&decoded[..]);
             let mut decompressed = Vec::new();
             decoder
+                .take(MAX_DECOMPRESSED_SIZE)
                 .read_to_end(&mut decompressed)
                 .map_err(|e: std::io::Error| DecodeError::DecompressionFailed(e.to_string()))?;
+
+            // Verify we didn't hit the limit (which would indicate potential zip bomb)
+            if decompressed.len() as u64 >= MAX_DECOMPRESSED_SIZE {
+                return Err(DecodeError::DecompressionFailed(
+                    "Decompressed size exceeds safety limit".to_string(),
+                ));
+            }
+
             Ok(decompressed)
         },
     }

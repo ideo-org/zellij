@@ -45,14 +45,27 @@ pub fn dispatch_kitty_apc(
     };
 
     // 2. Handle chunked transmission (m=1)
-    let payload = match chunk_assembler.add_chunk(cmd.image_id, &cmd.payload, cmd.more_chunks) {
+    let (cmd, payload) = match chunk_assembler.add_chunk(&cmd, &cmd.payload, cmd.more_chunks) {
         ChunkResult::Buffered => {
             return DispatchResult {
                 response: vec![],
                 passthrough_apc: vec![],
             };
         },
-        ChunkResult::Complete(payload) => payload,
+        ChunkResult::Complete(first_cmd, payload) => {
+            // Use metadata from first chunk if available, otherwise use current chunk
+            let final_cmd = if let Some(mut first) = first_cmd {
+                // Merge: keep first chunk's metadata, but update payload to assembled
+                first.payload = payload.clone();
+                first
+            } else {
+                // Single chunk transmission (no m=1 chunks before this m=0)
+                let mut c = cmd.clone();
+                c.payload = payload.clone();
+                c
+            };
+            (final_cmd, payload)
+        },
     };
 
     // 3. Dispatch by action

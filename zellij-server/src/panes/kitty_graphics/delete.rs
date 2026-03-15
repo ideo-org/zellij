@@ -98,7 +98,7 @@ fn delete_by_placement(cmd: &KittyCommand, store: &mut KittyImageStore) -> Delet
 /// d=C: Remove placements at cursor position.
 /// Conservative fallback: without grid position tracking (Task 12),
 /// we can't determine which placements intersect the cursor.
-/// If image_id is provided, delete that specific image; otherwise remove all.
+/// If image_id is provided, delete that specific image; otherwise no-op (safer than delete_all).
 fn delete_at_cursor(cmd: &KittyCommand, store: &mut KittyImageStore) -> DeleteResult {
     if let Some(id) = cmd.image_id {
         if store.remove(id) {
@@ -107,15 +107,14 @@ fn delete_at_cursor(cmd: &KittyCommand, store: &mut KittyImageStore) -> DeleteRe
                 removed_placement_ids: vec![],
             };
         }
-        DeleteResult::default()
-    } else {
-        delete_all(store)
     }
+    // No image_id specified: can't determine cursor intersections without grid tracking
+    DeleteResult::default()
 }
 
 /// d=R: Remove placements in a cell range.
 /// Conservative fallback: same approach as AtCursor — without grid tracking
-/// we can't determine range intersections.
+/// we can't determine range intersections. No-op if no image_id specified.
 fn delete_in_range(cmd: &KittyCommand, store: &mut KittyImageStore) -> DeleteResult {
     if let Some(id) = cmd.image_id {
         if store.remove(id) {
@@ -124,10 +123,9 @@ fn delete_in_range(cmd: &KittyCommand, store: &mut KittyImageStore) -> DeleteRes
                 removed_placement_ids: vec![],
             };
         }
-        DeleteResult::default()
-    } else {
-        delete_all(store)
     }
+    // No image_id specified: can't determine range intersections without grid tracking
+    DeleteResult::default()
 }
 
 /// d=Z: Remove placements matching a specific z-index.
@@ -410,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn kitty_delete_at_cursor_without_image_id_removes_all() {
+    fn kitty_delete_at_cursor_without_image_id_is_noop() {
         let mut store = KittyImageStore::new();
         store.store(Some(1), ImageFormat::Png, vec![0; 10]);
         store.store(Some(2), ImageFormat::Png, vec![0; 20]);
@@ -418,9 +416,8 @@ mod tests {
         let cmd = make_delete_cmd(Some(DeleteTarget::AtCursor), None, None, None);
         let result = handle_delete(&cmd, &mut store, 5, 10);
 
-        assert_eq!(store.image_count(), 0);
-        let ids: HashSet<u32> = result.removed_image_ids.into_iter().collect();
-        assert!(ids.contains(&1));
-        assert!(ids.contains(&2));
+        // Without image_id, delete_at_cursor should be a no-op (safer than delete_all)
+        assert_eq!(store.image_count(), 2);
+        assert!(result.removed_image_ids.is_empty());
     }
 }
