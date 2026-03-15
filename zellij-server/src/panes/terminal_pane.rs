@@ -217,7 +217,7 @@ impl Pane for TerminalPane {
                 },
                 ApcParserResult::Complete(apc_data) => {
                     // Complete APC captured — dispatch to kitty handler
-                    let (cursor_y, cursor_x) = self.grid.cursor_coordinates().unwrap_or((0, 0));
+                    let (cursor_x, cursor_y) = self.grid.cursor_coordinates().unwrap_or((0, 0));
                     let result = dispatch_kitty_apc(
                         &apc_data,
                         &mut self.grid.kitty_image_store.borrow_mut(),

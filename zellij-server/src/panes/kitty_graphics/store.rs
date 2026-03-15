@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -99,7 +99,7 @@ impl KittyImageStore {
 
         // If replacing an existing image, subtract its old memory
         if let Some(old) = self.images.get(&actual_id) {
-            self.total_bytes -= old.memory_bytes();
+            self.total_bytes = self.total_bytes.saturating_sub(old.memory_bytes());
         }
 
         let image = KittyImage::new(actual_id, format, data);
@@ -122,7 +122,7 @@ impl KittyImageStore {
 
     pub fn remove(&mut self, id: u32) -> bool {
         if let Some(image) = self.images.remove(&id) {
-            self.total_bytes -= image.memory_bytes();
+            self.total_bytes = self.total_bytes.saturating_sub(image.memory_bytes());
             self.access_order.retain(|&x| x != id);
             true
         } else {
