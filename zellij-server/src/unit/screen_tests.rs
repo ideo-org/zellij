@@ -173,7 +173,6 @@ impl ServerOsApi for FakeInputOutput {
         _width_in_pixels: Option<u16>,
         _height_in_pixels: Option<u16>,
     ) -> Result<()> {
-        // noop
         Ok(())
     }
     fn spawn_terminal(
@@ -1490,6 +1489,63 @@ fn update_screen_pixel_dimensions() {
             }),
         },
         "empty update does not delete existing data",
+    );
+}
+
+#[test]
+fn update_screen_pixel_dimensions_resizes_existing_terminal_panes_with_pixel_sizes() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let mut mock_screen = MockScreen::new(size);
+    let pty_writer_receiver = mock_screen.pty_writer_receiver.take().unwrap();
+    let screen_thread = mock_screen.run(None, vec![]);
+    let received_pty_instructions = Arc::new(Mutex::new(vec![]));
+    let pty_writer_thread = log_actions_in_thread!(
+        received_pty_instructions,
+        PtyWriteInstruction::Exit,
+        pty_writer_receiver
+    );
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    received_pty_instructions.lock().unwrap().clear();
+
+    let _ = mock_screen
+        .to_screen
+        .send(ScreenInstruction::TerminalPixelDimensions(
+            PixelDimensions {
+                character_cell_size: Some(SizeInPixels {
+                    height: 10,
+                    width: 5,
+                }),
+                text_area_size: None,
+            },
+        ));
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    mock_screen.teardown(vec![pty_writer_thread, screen_thread]);
+
+    let received_pty_instructions = received_pty_instructions.lock().unwrap();
+    let resize_with_pixels = received_pty_instructions.iter().find_map(|instruction| {
+        if let PtyWriteInstruction::ResizePty(terminal_id, cols, rows, Some(width), Some(height)) =
+            instruction
+        {
+            Some((*terminal_id, *cols, *rows, *width, *height))
+        } else {
+            None
+        }
+    });
+    assert!(
+        resize_with_pixels.is_some(),
+        "existing panes resized with pixel dimensions"
+    );
+    let (terminal_id, cols, rows, width_in_pixels, height_in_pixels) = resize_with_pixels.unwrap();
+    assert_eq!(terminal_id, 0, "the existing terminal pane was resized");
+    assert_eq!(width_in_pixels, cols * 5, "pane width propagated in pixels");
+    assert_eq!(
+        height_in_pixels,
+        rows * 10,
+        "pane height propagated in pixels"
     );
 }
 

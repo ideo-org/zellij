@@ -192,6 +192,7 @@ pub(crate) fn stdin_loop(
             Ok(result) => {
                 match result {
                     Ok(buf) => {
+                        let mut bytes_to_process = buf.to_vec();
                         {
                             // here we check if we need to parse specialized ANSI instructions sent over STDIN
                             // this happens either on startup (see above) or on SIGWINCH
@@ -200,13 +201,16 @@ pub(crate) fn stdin_loop(
                             // receive on STDIN during that timeout is unceremoniously dropped
                             let mut stdin_ansi_parser = stdin_ansi_parser.lock().unwrap();
                             if stdin_ansi_parser.should_parse() {
-                                let events = stdin_ansi_parser.parse(buf);
+                                let events = stdin_ansi_parser.parse(buf.to_vec());
                                 if !events.is_empty() {
                                     ansi_stdin_events.append(&mut events.clone());
                                     let _ = send_input_instructions
                                         .send(InputInstruction::AnsiStdinInstructions(events));
                                 }
-                                continue;
+                                bytes_to_process = stdin_ansi_parser.drain_pending_unparsed_bytes();
+                                if bytes_to_process.is_empty() {
+                                    continue;
+                                }
                             }
                         }
                         if !ansi_stdin_events.is_empty() {
@@ -215,12 +219,12 @@ pub(crate) fn stdin_loop(
                                 .unwrap()
                                 .write_cache(ansi_stdin_events.drain(..).collect());
                         }
-                        current_buffer.append(&mut buf.to_vec());
+                        current_buffer.extend_from_slice(&bytes_to_process);
 
                         if !explicitly_disable_kitty_keyboard_protocol {
                             // first we try to parse with the KittyKeyboardParser
                             // if we fail, we try to parse normally
-                            match KittyKeyboardParser::new().parse(&buf) {
+                            match KittyKeyboardParser::new().parse(&bytes_to_process) {
                                 Some(key_with_modifier) => {
                                     send_input_instructions
                                         .send(InputInstruction::KeyWithModifierEvent(
@@ -242,7 +246,7 @@ pub(crate) fn stdin_loop(
                         let maybe_more = true;
                         let mut events = vec![];
                         input_parser.parse(
-                            &buf,
+                            &bytes_to_process,
                             |input_event: InputEvent| {
                                 events.push(input_event);
                             },
@@ -301,6 +305,16 @@ fn finalize_events(
         },
         false,
     );
+    if events.is_empty() {
+        if !current_buffer.is_empty() {
+            send_input_instructions
+                .send(InputInstruction::RawBytes(
+                    current_buffer.drain(..).collect(),
+                ))
+                .unwrap();
+        }
+        return;
+    }
     for input_event in events {
         send_input_instructions
             .send(InputInstruction::KeyEvent(

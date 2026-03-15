@@ -1,0 +1,59 @@
+name: Kitty Graphics
+
+on:
+  push:
+    paths:
+      - ".github/workflows/kitty-graphics.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "zellij-client/src/stdin_handler.rs"
+      - "zellij-server/src/panes/grid.rs"
+      - "zellij-server/src/panes/terminal_pane.rs"
+      - "zellij-server/src/panes/kitty_graphics/**"
+      - "zellij-server/src/panes/unit/grid_tests.rs"
+      - "zellij-server/src/panes/unit/terminal_pane_tests.rs"
+      - "zellij-server/src/screen.rs"
+      - "zellij-server/src/unit/screen_tests.rs"
+  pull_request:
+    paths:
+      - ".github/workflows/kitty-graphics.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "zellij-client/src/stdin_handler.rs"
+      - "zellij-server/src/panes/grid.rs"
+      - "zellij-server/src/panes/terminal_pane.rs"
+      - "zellij-server/src/panes/kitty_graphics/**"
+      - "zellij-server/src/panes/unit/grid_tests.rs"
+      - "zellij-server/src/panes/unit/terminal_pane_tests.rs"
+      - "zellij-server/src/screen.rs"
+      - "zellij-server/src/unit/screen_tests.rs"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  RUST_BACKTRACE: short
+  CARGO_UNSTABLE_SPARSE_REGISTRY: true
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+jobs:
+  kitty-unit-tests:
+    name: Kitty graphics unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
+
+      - name: Run kitty graphics unit tests
+        run: cargo test -p zellij-server kitty -- --test-threads 4

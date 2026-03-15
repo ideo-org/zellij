@@ -11,7 +11,6 @@
 
 use anyhow::Context;
 use colored::*;
-use log::error;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Error, Formatter};
 use std::path::PathBuf;
@@ -689,6 +688,7 @@ pub use not_wasm::*;
 mod not_wasm {
     use super::*;
     use crate::channels::{SenderWithContext, ASYNCOPENCALLS, OPENCALLS};
+    use log::error;
     use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, Report};
     use std::panic::PanicHookInfo;
     use thiserror::Error as ThisError;

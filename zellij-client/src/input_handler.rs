@@ -236,6 +236,16 @@ impl InputHandler {
                 )) => {
                     self.handle_key(&key_with_modifier, raw_bytes, is_kitty);
                 },
+                Ok((InputInstruction::RawBytes(raw_bytes), _error_context)) => {
+                    self.dispatch_action(
+                        Action::Write {
+                            key_with_modifier: None,
+                            bytes: raw_bytes,
+                            is_kitty_keyboard_protocol: false,
+                        },
+                        None,
+                    );
+                },
                 Ok((InputInstruction::MouseEvent(mouse_event), _error_context)) => {
                     self.handle_mouse_event(&mouse_event);
                 },
