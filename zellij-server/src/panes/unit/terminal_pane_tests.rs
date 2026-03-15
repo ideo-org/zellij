@@ -928,9 +928,9 @@ fn kitty_apc(payload: &str) -> Vec<u8> {
 }
 
 #[test]
-pub fn kitty_transmit_apc_goes_to_passthrough_not_pty() {
-    // Verify that a Kitty transmit APC (a=T) ends up in pending_kitty_passthrough
-    // and NOT in pending_messages_to_pty (which would send it back to the app).
+pub fn kitty_transmit_apc_no_passthrough() {
+    // Verify that a Kitty transmit APC (a=T) does NOT produce passthrough.
+    // Zellij handles rendering locally via placeholders.
     let mut pane = make_terminal_pane(80, 24);
 
     // Minimal valid transmit: action=T, format=32 (RGBA), size=1x1, image_id=1
@@ -938,11 +938,11 @@ pub fn kitty_transmit_apc_goes_to_passthrough_not_pty() {
     let apc = kitty_apc("a=T,f=32,s=1,v=1,i=1;AAAAAA==");
     pane.handle_pty_bytes(apc);
 
-    // The passthrough APC should be queued for the host terminal
+    // No passthrough: Zellij handles rendering locally
     let passthrough = pane.take_pending_kitty_passthrough();
     assert!(
-        !passthrough.is_empty(),
-        "transmit APC should produce passthrough bytes for host terminal"
+        passthrough.is_empty(),
+        "transmit APC should NOT produce passthrough (local rendering only)"
     );
 
     // After draining, it should be empty
@@ -1069,11 +1069,11 @@ pub fn kitty_delete_apc_produces_passthrough_for_host_cleanup() {
     let delete = kitty_apc("a=d,d=I,i=5");
     pane.handle_pty_bytes(delete);
 
-    // Delete SHOULD produce passthrough to forward to host terminal
+    // Delete should NOT produce passthrough (host terminal has no images)
     let passthrough = pane.take_pending_kitty_passthrough();
     assert!(
-        !passthrough.is_empty(),
-        "delete APC should produce passthrough bytes for host terminal cleanup"
+        passthrough.is_empty(),
+        "delete APC should NOT produce passthrough (host has no images)"
     );
 }
 
@@ -1128,9 +1128,8 @@ pub fn kitty_chunked_transmission_assembles_correctly() {
 }
 
 #[test]
-pub fn kitty_take_pending_passthrough_is_idempotent() {
-    // Verify that calling take_pending_kitty_passthrough() multiple times
-    // returns empty after the first drain.
+pub fn kitty_take_pending_passthrough_always_empty() {
+    // Verify that pending_kitty_passthrough is always empty (no passthrough).
     let mut pane = make_terminal_pane(80, 24);
 
     let apc = kitty_apc("a=T,f=32,s=1,v=1,i=10;AAAAAA==");
@@ -1140,10 +1139,7 @@ pub fn kitty_take_pending_passthrough_is_idempotent() {
     let second = pane.take_pending_kitty_passthrough();
     let third = pane.take_pending_kitty_passthrough();
 
-    assert!(
-        !first.is_empty(),
-        "first drain should have passthrough bytes"
-    );
+    assert!(first.is_empty(), "no passthrough: local rendering only");
     assert!(second.is_empty(), "second drain should be empty");
     assert!(third.is_empty(), "third drain should be empty");
 }

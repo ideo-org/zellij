@@ -63,17 +63,19 @@ pub fn dispatch_kitty_apc(
     match action {
         KittyAction::TransmitAndDisplay | KittyAction::Transmit => {
             let response = handle_transmit(&cmd, &payload, store);
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: Zellij handles rendering via placeholders.
+            // Host terminal would render at wrong coordinates (pane-relative vs window-absolute).
             DispatchResult {
                 response,
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Place => {
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: placement uses pane-relative coordinates.
+            // Host terminal would interpret as window-absolute, causing misalignment.
             DispatchResult {
                 response: vec![],
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Query => {
@@ -91,26 +93,26 @@ pub fn dispatch_kitty_apc(
         },
         KittyAction::Delete => {
             let _result = handle_delete(&cmd, store, cursor_row, cursor_col);
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: host terminal has no images (we don't forward transmit).
             DispatchResult {
                 response: vec![],
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Frame => {
             let response = handle_frame(&cmd, store);
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: animations managed locally.
             DispatchResult {
                 response,
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Animate => {
             let response = handle_animate(&cmd, store);
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: animations managed locally.
             DispatchResult {
                 response,
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
     }
@@ -241,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_transmit_has_passthrough() {
+    fn dispatch_transmit_no_passthrough() {
         let mut store = KittyImageStore::new();
         let mut assembler = ChunkAssembler::new();
         let png_b64 = base64::encode(b"PNG");
@@ -249,12 +251,9 @@ mod tests {
 
         let result = dispatch_kitty_apc(apc_data.as_bytes(), &mut store, &mut assembler, 0, 0);
 
-        // Passthrough APC should be populated for transmit actions
-        assert!(!result.passthrough_apc.is_empty());
-        assert!(result.passthrough_apc.starts_with(b"\x1b_G"));
-        assert!(result.passthrough_apc.ends_with(b"\x1b\\"));
+        // No passthrough: Zellij handles rendering locally
+        assert!(result.passthrough_apc.is_empty());
     }
-
     #[test]
     fn dispatch_query_no_passthrough() {
         let mut store = KittyImageStore::new();
@@ -267,17 +266,15 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_delete_has_passthrough() {
+    fn dispatch_delete_no_passthrough() {
         let mut store = KittyImageStore::new();
         let mut assembler = ChunkAssembler::new();
 
         let result = dispatch_kitty_apc(b"a=d,d=A", &mut store, &mut assembler, 0, 0);
 
-        // Delete SHOULD have passthrough to tell host terminal to remove images
-        assert!(!result.passthrough_apc.is_empty());
-        assert!(result.passthrough_apc.starts_with(b"\x1b_G"));
+        // No passthrough: host terminal has no images to delete
+        assert!(result.passthrough_apc.is_empty());
     }
-
     #[test]
     fn dispatch_frame_stores_frame() {
         let mut store = KittyImageStore::new();
@@ -294,8 +291,8 @@ mod tests {
         // Response should contain OK
         let resp_str = String::from_utf8_lossy(&result.response);
         assert!(resp_str.contains("OK"));
-        // Passthrough should be populated
-        assert!(!result.passthrough_apc.is_empty());
+        // No passthrough: animations managed locally
+        assert!(result.passthrough_apc.is_empty());
     }
 
     #[test]
@@ -310,7 +307,7 @@ mod tests {
         // Response should contain OK
         let resp_str = String::from_utf8_lossy(&result.response);
         assert!(resp_str.contains("OK"));
-        // Passthrough should be populated
-        assert!(!result.passthrough_apc.is_empty());
+        // No passthrough: animations managed locally
+        assert!(result.passthrough_apc.is_empty());
     }
 }
