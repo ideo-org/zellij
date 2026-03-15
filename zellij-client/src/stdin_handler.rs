@@ -11,6 +11,9 @@ use zellij_utils::{
     vendored::termwiz::input::{InputEvent, InputParser},
 };
 
+const BRACKETED_PASTE_START: [u8; 6] = [27, 91, 50, 48, 48, 126];
+const BRACKETED_PASTE_END: [u8; 6] = [27, 91, 50, 48, 49, 126];
+
 fn send_done_parsing_after_query_timeout(
     send_input_instructions: SenderWithContext<InputInstruction>,
     query_duration: u64,
@@ -256,6 +259,9 @@ fn finalize_events(
         false,
     );
     if events.is_empty() {
+        if is_incomplete_bracketed_paste_prefix(current_buffer) {
+            return;
+        }
         if !current_buffer.is_empty() {
             send_input_instructions
                 .send(InputInstruction::RawBytes(
@@ -271,6 +277,15 @@ fn finalize_events(
                 input_event,
                 current_buffer.drain(..).collect(),
             ))
-            .unwrap();
+        .unwrap();
     }
+}
+
+fn is_incomplete_bracketed_paste_prefix(current_buffer: &[u8]) -> bool {
+    if !current_buffer.starts_with(&BRACKETED_PASTE_START) {
+        return false;
+    }
+    !current_buffer
+        .windows(BRACKETED_PASTE_END.len())
+        .any(|window| window == BRACKETED_PASTE_END.as_slice())
 }
