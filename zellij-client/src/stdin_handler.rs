@@ -277,7 +277,7 @@ fn finalize_events(
                 input_event,
                 current_buffer.drain(..).collect(),
             ))
-        .unwrap();
+            .unwrap();
     }
 }
 

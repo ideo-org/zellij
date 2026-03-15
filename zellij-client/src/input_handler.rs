@@ -3,6 +3,8 @@ use crate::{
     os_input_output::ClientOsApi, stdin_ansi_parser::AnsiStdinInstruction, ClientId,
     ClientInstruction, CommandIsExecuting, InputInstruction,
 };
+const BRACKETED_PASTE_START: [u8; 6] = [27, 91, 50, 48, 48, 126]; // \u{1b}[200~
+const BRACKETED_PASTE_END: [u8; 6] = [27, 91, 50, 48, 49, 126]; // \u{1b}[201~
 use zellij_utils::{
     channels::{Receiver, SenderWithContext, OPENCALLS},
     data::{InputMode, KeyWithModifier},
@@ -119,6 +121,22 @@ pub fn from_termwiz(old_event: &mut MouseEvent, event: TermwizMouseEvent) -> Mou
     new_event
 }
 
+fn split_bracketed_paste_bytes(raw_bytes: &[u8]) -> Option<(&[u8], &[u8], &[u8])> {
+    if !raw_bytes.starts_with(&BRACKETED_PASTE_START) {
+        return None;
+    }
+    let end = raw_bytes
+        .windows(BRACKETED_PASTE_END.len())
+        .position(|window| window == BRACKETED_PASTE_END.as_slice())?;
+    if end + BRACKETED_PASTE_END.len() != raw_bytes.len() {
+        return None;
+    }
+    let start = &raw_bytes[..BRACKETED_PASTE_START.len()];
+    let text = &raw_bytes[BRACKETED_PASTE_START.len()..end];
+    let finish = &raw_bytes[end..];
+    Some((start, text, finish))
+}
+
 impl InputHandler {
     /// Returns a new [`InputHandler`] with the attributes specified as arguments.
     fn new(
@@ -150,8 +168,6 @@ impl InputHandler {
     fn handle_input(&mut self) {
         let mut err_ctx = OPENCALLS.with(|ctx| *ctx.borrow());
         err_ctx.add_call(ContextType::StdinHandler);
-        let bracketed_paste_start = vec![27, 91, 50, 48, 48, 126]; // \u{1b}[200~
-        let bracketed_paste_end = vec![27, 91, 50, 48, 49, 126]; // \u{1b}[201~
         if self.options.mouse_mode.unwrap_or(true) {
             self.os_input.enable_mouse().non_fatal();
             self.mouse_mode_active = true;
@@ -180,7 +196,7 @@ impl InputHandler {
                                 self.dispatch_action(
                                     Action::Write {
                                         key_with_modifier: None,
-                                        bytes: bracketed_paste_start.clone(),
+                                        bytes: BRACKETED_PASTE_START.to_vec(),
                                         is_kitty_keyboard_protocol: false,
                                     },
                                     None,
@@ -196,7 +212,7 @@ impl InputHandler {
                                 self.dispatch_action(
                                     Action::Write {
                                         key_with_modifier: None,
-                                        bytes: bracketed_paste_end.clone(),
+                                        bytes: BRACKETED_PASTE_END.to_vec(),
                                         is_kitty_keyboard_protocol: false,
                                     },
                                     None,
@@ -237,6 +253,35 @@ impl InputHandler {
                     self.handle_key(&key_with_modifier, raw_bytes, is_kitty);
                 },
                 Ok((InputInstruction::RawBytes(raw_bytes), _error_context)) => {
+                    if self.mode == InputMode::Normal || self.mode == InputMode::Locked {
+                        if let Some((start, text, end)) = split_bracketed_paste_bytes(&raw_bytes) {
+                            self.dispatch_action(
+                                Action::Write {
+                                    key_with_modifier: None,
+                                    bytes: start.to_vec(),
+                                    is_kitty_keyboard_protocol: false,
+                                },
+                                None,
+                            );
+                            self.dispatch_action(
+                                Action::Write {
+                                    key_with_modifier: None,
+                                    bytes: text.to_vec(),
+                                    is_kitty_keyboard_protocol: false,
+                                },
+                                None,
+                            );
+                            self.dispatch_action(
+                                Action::Write {
+                                    key_with_modifier: None,
+                                    bytes: end.to_vec(),
+                                    is_kitty_keyboard_protocol: false,
+                                },
+                                None,
+                            );
+                            continue;
+                        }
+                    }
                     self.dispatch_action(
                         Action::Write {
                             key_with_modifier: None,
