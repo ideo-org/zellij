@@ -268,17 +268,15 @@ impl Pane for TerminalPane {
         // we send back the original input
 
         self.reset_selection(client_id);
-        if !self.grid.bracketed_paste_mode {
-            // Zellij itself operates in bracketed paste mode, so the terminal sends these
-            // instructions (bracketed paste start and bracketed paste end respectively)
-            // when pasting input. We only need to make sure not to send them to terminal
-            // panes who do not work in this mode
-            match raw_input_bytes.as_slice() {
-                BRACKETED_PASTE_BEGIN | BRACKETED_PASTE_END => {
-                    return Some(AdjustedInput::WriteBytesToTerminal(vec![]))
-                },
-                _ => {},
-            }
+        // Zellij itself operates in bracketed paste mode, so the terminal sends these
+        // instructions (bracketed paste start and bracketed paste end respectively)
+        // when pasting input. We should always consume these markers and never forward
+        // them to the terminal pane - they are Zellij's internal paste indicators.
+        match raw_input_bytes.as_slice() {
+            BRACKETED_PASTE_BEGIN | BRACKETED_PASTE_END => {
+                return Some(AdjustedInput::WriteBytesToTerminal(vec![]))
+            },
+            _ => {},
         }
 
         if self.is_held.is_some() {
