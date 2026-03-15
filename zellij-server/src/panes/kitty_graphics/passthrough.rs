@@ -31,15 +31,13 @@ pub fn build_passthrough_apc(apc_data: &[u8]) -> Vec<u8> {
 }
 
 /// Determine whether a given action should be passed through to the host terminal.
+///
+/// Only Transmit actions are forwarded - the host terminal caches the image data.
+/// Placement, deletion, and animations are handled locally by Zellij via Unicode placeholders.
 pub fn should_passthrough(action: &KittyAction) -> bool {
     matches!(
         action,
-        KittyAction::TransmitAndDisplay
-            | KittyAction::Transmit
-            | KittyAction::Place
-            | KittyAction::Delete
-            | KittyAction::Frame
-            | KittyAction::Animate
+        KittyAction::TransmitAndDisplay | KittyAction::Transmit
     )
 }
 
@@ -80,19 +78,16 @@ mod tests {
     }
 
     #[test]
-    fn should_passthrough_transmit_actions() {
+    fn should_passthrough_transmit_only() {
+        // Only Transmit actions should be forwarded to host terminal
         assert!(should_passthrough(&KittyAction::TransmitAndDisplay));
         assert!(should_passthrough(&KittyAction::Transmit));
-        assert!(should_passthrough(&KittyAction::Place));
-    }
-
-    #[test]
-    fn should_not_passthrough_query_only() {
+        
+        // All other actions are handled locally by Zellij
+        assert!(!should_passthrough(&KittyAction::Place));
         assert!(!should_passthrough(&KittyAction::Query));
-    }
-
-    #[test]
-    fn should_passthrough_delete() {
-        assert!(should_passthrough(&KittyAction::Delete));
+        assert!(!should_passthrough(&KittyAction::Delete));
+        assert!(!should_passthrough(&KittyAction::Frame));
+        assert!(!should_passthrough(&KittyAction::Animate));
     }
 }

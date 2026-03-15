@@ -70,10 +70,12 @@ pub fn dispatch_kitty_apc(
             }
         },
         KittyAction::Place => {
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough for Place: Zellij handles placement via Unicode placeholders.
+            // Forwarding to host terminal would use window-absolute coords instead of pane-relative,
+            // causing images to appear at wrong positions.
             DispatchResult {
                 response: vec![],
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Query => {
@@ -91,26 +93,26 @@ pub fn dispatch_kitty_apc(
         },
         KittyAction::Delete => {
             let _result = handle_delete(&cmd, store, cursor_row, cursor_col);
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: Zellij manages image lifecycle locally
             DispatchResult {
                 response: vec![],
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Frame => {
             let response = handle_frame(&cmd, store);
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: frames managed locally
             DispatchResult {
                 response,
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
         KittyAction::Animate => {
             let response = handle_animate(&cmd, store);
-            let passthrough_apc = build_passthrough_apc(apc_data);
+            // No passthrough: animations managed locally
             DispatchResult {
                 response,
-                passthrough_apc,
+                passthrough_apc: vec![],
             }
         },
     }
@@ -267,17 +269,15 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_delete_has_passthrough() {
+    fn dispatch_delete_no_passthrough() {
         let mut store = KittyImageStore::new();
         let mut assembler = ChunkAssembler::new();
 
         let result = dispatch_kitty_apc(b"a=d,d=A", &mut store, &mut assembler, 0, 0);
 
-        // Delete SHOULD have passthrough to tell host terminal to remove images
-        assert!(!result.passthrough_apc.is_empty());
-        assert!(result.passthrough_apc.starts_with(b"\x1b_G"));
+        // Delete should NOT have passthrough - Zellij manages deletion locally
+        assert!(result.passthrough_apc.is_empty());
     }
-
     #[test]
     fn dispatch_frame_stores_frame() {
         let mut store = KittyImageStore::new();
@@ -294,8 +294,8 @@ mod tests {
         // Response should contain OK
         let resp_str = String::from_utf8_lossy(&result.response);
         assert!(resp_str.contains("OK"));
-        // Passthrough should be populated
-        assert!(!result.passthrough_apc.is_empty());
+        // No passthrough - frames managed locally
+        assert!(result.passthrough_apc.is_empty());
     }
 
     #[test]
@@ -310,7 +310,7 @@ mod tests {
         // Response should contain OK
         let resp_str = String::from_utf8_lossy(&result.response);
         assert!(resp_str.contains("OK"));
-        // Passthrough should be populated
-        assert!(!result.passthrough_apc.is_empty());
+        // No passthrough - animations managed locally
+        assert!(result.passthrough_apc.is_empty());
     }
 }

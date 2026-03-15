@@ -1054,9 +1054,9 @@ pub fn kitty_apc_mixed_with_regular_bytes() {
 }
 
 #[test]
-pub fn kitty_delete_apc_produces_passthrough_for_host_cleanup() {
-    // Verify that a delete APC (a=d) produces passthrough bytes so the host
-    // terminal also removes the image (prevents stuck images).
+pub fn kitty_delete_apc_no_passthrough() {
+    // Verify that a delete APC (a=d) does NOT produce passthrough.
+    // Zellij manages image deletion locally.
     let mut pane = make_terminal_pane(80, 24);
 
     // First transmit an image
@@ -1069,11 +1069,11 @@ pub fn kitty_delete_apc_produces_passthrough_for_host_cleanup() {
     let delete = kitty_apc("a=d,d=I,i=5");
     pane.handle_pty_bytes(delete);
 
-    // Delete SHOULD produce passthrough to forward to host terminal
+    // Delete should NOT produce passthrough - Zellij manages deletion locally
     let passthrough = pane.take_pending_kitty_passthrough();
     assert!(
-        !passthrough.is_empty(),
-        "delete APC should produce passthrough bytes for host terminal cleanup"
+        passthrough.is_empty(),
+        "delete APC should NOT produce passthrough (managed locally)"
     );
 }
 
