@@ -11,7 +11,6 @@
 
 use anyhow::Context;
 use colored::*;
-use log::error;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Error, Formatter};
 use std::path::PathBuf;
@@ -418,6 +417,34 @@ pub enum ScreenContext {
     ClearPluginHighlights,
     SubscribeToPaneRenders,
     NotifyPaneClosedToSubscribers,
+    // Pane-targeting CLI variants
+    ScrollUpWithPaneId,
+    ScrollDownWithPaneId,
+    ScrollToTopWithPaneId,
+    ScrollToBottomWithPaneId,
+    PageScrollUpWithPaneId,
+    PageScrollDownWithPaneId,
+    HalfPageScrollUpWithPaneId,
+    HalfPageScrollDownWithPaneId,
+    ResizeWithPaneId,
+    MovePaneWithPaneIdCli,
+    MovePaneBackwardsWithPaneId,
+    ClearScreenWithPaneId,
+    EditScrollbackWithPaneId,
+    ToggleFullscreenWithPaneId,
+    TogglePaneEmbedOrFloatingWithPaneId,
+    CloseFocusWithPaneId,
+    RenamePaneWithPaneId,
+    UndoRenamePaneWithPaneId,
+    TogglePanePinnedWithPaneId,
+    // Tab-targeting CLI variants
+    UndoRenameTabWithTabId,
+    ToggleActiveSyncTabWithTabId,
+    ToggleFloatingPanesWithTabId,
+    PreviousSwapLayoutWithTabId,
+    NextSwapLayoutWithTabId,
+    MoveTabWithTabId,
+    PluginSubscribedToAnsiPaneContents,
 }
 
 /// Stack call representations corresponding to the different types of [`PtyInstruction`]s.
@@ -689,6 +716,7 @@ pub use not_wasm::*;
 mod not_wasm {
     use super::*;
     use crate::channels::{SenderWithContext, ASYNCOPENCALLS, OPENCALLS};
+    use log::error;
     use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, Report};
     use std::panic::PanicHookInfo;
     use thiserror::Error as ThisError;

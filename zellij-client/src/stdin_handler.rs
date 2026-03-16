@@ -1,6 +1,8 @@
 use crate::keyboard_parser::KittyKeyboardParser;
 use crate::os_input_output::ClientOsApi;
 use crate::stdin_ansi_parser::StdinAnsiParser;
+#[cfg(windows)]
+use crate::stdin_handler_windows::enable_vt_input;
 use crate::InputInstruction;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
@@ -8,6 +10,9 @@ use zellij_utils::{
     channels::SenderWithContext,
     vendored::termwiz::input::{InputEvent, InputParser},
 };
+
+const BRACKETED_PASTE_START: [u8; 6] = [27, 91, 50, 48, 48, 126];
+const BRACKETED_PASTE_END: [u8; 6] = [27, 91, 50, 48, 49, 126];
 
 fn send_done_parsing_after_query_timeout(
     send_input_instructions: SenderWithContext<InputInstruction>,
@@ -21,58 +26,6 @@ fn send_done_parsing_after_query_timeout(
                 .unwrap();
         }
     });
-}
-
-/// On Windows, set the stdin console mode for raw VT input.
-///
-/// Instead of just ORing in ENABLE_VIRTUAL_TERMINAL_INPUT on top of whatever
-/// the current mode happens to be, we explicitly set the exact mode we need.
-/// This avoids a TOCTOU race with crossterm's EnableMouseCapture (which also
-/// does GetConsoleMode/SetConsoleMode) and ensures flags like
-/// ENABLE_QUICK_EDIT_MODE are always cleared — that flag intercepts mouse
-/// events at the console level, breaking application mouse support.
-#[cfg(windows)]
-fn enable_vt_input() -> bool {
-    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
-    use windows_sys::Win32::System::Console::{
-        GetConsoleMode, GetStdHandle, SetConsoleMode, ENABLE_EXTENDED_FLAGS, ENABLE_MOUSE_INPUT,
-        ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_WINDOW_INPUT, STD_INPUT_HANDLE,
-    };
-    unsafe {
-        let handle = GetStdHandle(STD_INPUT_HANDLE);
-        if handle == 0 || handle == INVALID_HANDLE_VALUE {
-            return false;
-        }
-        let mut mode: u32 = 0;
-        if GetConsoleMode(handle, &mut mode) == 0 {
-            return false;
-        }
-        // Explicitly set the mode we need rather than read-modify-write.
-        // This eliminates the race with crossterm's EnableMouseCapture which
-        // also calls GetConsoleMode/SetConsoleMode concurrently.
-        //
-        // Flags we set:
-        //   ENABLE_WINDOW_INPUT           (0x0008) - receive window resize events
-        //   ENABLE_MOUSE_INPUT            (0x0010) - receive mouse events; on ConPTY
-        //                                            this signals the terminal emulator
-        //                                            to capture and forward mouse input
-        //   ENABLE_EXTENDED_FLAGS         (0x0080) - required to clear QUICK_EDIT
-        //   ENABLE_VIRTUAL_TERMINAL_INPUT (0x0200) - stdin returns raw VT bytes
-        //
-        // Flags we deliberately clear:
-        //   ENABLE_PROCESSED_INPUT  (0x0001) - let VT sequences through raw
-        //   ENABLE_LINE_INPUT       (0x0002) - no line buffering
-        //   ENABLE_ECHO_INPUT       (0x0004) - no echo
-        //   ENABLE_QUICK_EDIT_MODE  (0x0040) - would intercept mouse events
-        let new_mode = ENABLE_WINDOW_INPUT
-            | ENABLE_MOUSE_INPUT
-            | ENABLE_EXTENDED_FLAGS
-            | ENABLE_VIRTUAL_TERMINAL_INPUT;
-        if SetConsoleMode(handle, new_mode) == 0 {
-            return false;
-        }
-        true
-    }
 }
 
 pub(crate) fn stdin_loop(
@@ -192,6 +145,7 @@ pub(crate) fn stdin_loop(
             Ok(result) => {
                 match result {
                     Ok(buf) => {
+                        let mut bytes_to_process = buf.to_vec();
                         {
                             // here we check if we need to parse specialized ANSI instructions sent over STDIN
                             // this happens either on startup (see above) or on SIGWINCH
@@ -200,13 +154,16 @@ pub(crate) fn stdin_loop(
                             // receive on STDIN during that timeout is unceremoniously dropped
                             let mut stdin_ansi_parser = stdin_ansi_parser.lock().unwrap();
                             if stdin_ansi_parser.should_parse() {
-                                let events = stdin_ansi_parser.parse(buf);
+                                let events = stdin_ansi_parser.parse(buf.to_vec());
                                 if !events.is_empty() {
                                     ansi_stdin_events.append(&mut events.clone());
                                     let _ = send_input_instructions
                                         .send(InputInstruction::AnsiStdinInstructions(events));
                                 }
-                                continue;
+                                bytes_to_process = stdin_ansi_parser.drain_pending_unparsed_bytes();
+                                if bytes_to_process.is_empty() {
+                                    continue;
+                                }
                             }
                         }
                         if !ansi_stdin_events.is_empty() {
@@ -215,12 +172,12 @@ pub(crate) fn stdin_loop(
                                 .unwrap()
                                 .write_cache(ansi_stdin_events.drain(..).collect());
                         }
-                        current_buffer.append(&mut buf.to_vec());
+                        current_buffer.extend_from_slice(&bytes_to_process);
 
                         if !explicitly_disable_kitty_keyboard_protocol {
                             // first we try to parse with the KittyKeyboardParser
                             // if we fail, we try to parse normally
-                            match KittyKeyboardParser::new().parse(&buf) {
+                            match KittyKeyboardParser::new().parse(&bytes_to_process) {
                                 Some(key_with_modifier) => {
                                     send_input_instructions
                                         .send(InputInstruction::KeyWithModifierEvent(
@@ -242,7 +199,7 @@ pub(crate) fn stdin_loop(
                         let maybe_more = true;
                         let mut events = vec![];
                         input_parser.parse(
-                            &buf,
+                            &bytes_to_process,
                             |input_event: InputEvent| {
                                 events.push(input_event);
                             },
@@ -301,6 +258,19 @@ fn finalize_events(
         },
         false,
     );
+    if events.is_empty() {
+        if is_incomplete_bracketed_paste_prefix(current_buffer) {
+            return;
+        }
+        if !current_buffer.is_empty() {
+            send_input_instructions
+                .send(InputInstruction::RawBytes(
+                    current_buffer.drain(..).collect(),
+                ))
+                .unwrap();
+        }
+        return;
+    }
     for input_event in events {
         send_input_instructions
             .send(InputInstruction::KeyEvent(
@@ -309,4 +279,13 @@ fn finalize_events(
             ))
             .unwrap();
     }
+}
+
+fn is_incomplete_bracketed_paste_prefix(current_buffer: &[u8]) -> bool {
+    if !current_buffer.starts_with(&BRACKETED_PASTE_START) {
+        return false;
+    }
+    !current_buffer
+        .windows(BRACKETED_PASTE_END.len())
+        .any(|window| window == BRACKETED_PASTE_END.as_slice())
 }

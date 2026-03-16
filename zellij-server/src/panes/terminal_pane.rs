@@ -1,4 +1,6 @@
-use crate::output::{CharacterChunk, SixelImageChunk};
+﻿use crate::output::{CharacterChunk, SixelImageChunk};
+use crate::panes::kitty_graphics::apc_parser::{ApcParser, ApcParserResult};
+use crate::panes::kitty_graphics::dispatcher::dispatch_kitty_apc;
 use crate::panes::sixel::SixelImageStore;
 use crate::panes::LinkHandler;
 use crate::panes::{
@@ -153,6 +155,8 @@ pub struct TerminalPane {
     #[allow(dead_code)]
     arrow_fonts: bool,
     notification_end: Option<NotificationEnd>,
+    apc_parser: ApcParser,
+    pending_kitty_passthrough: Vec<Vec<u8>>,
 }
 
 impl Pane for TerminalPane {
@@ -204,7 +208,37 @@ impl Pane for TerminalPane {
     fn handle_pty_bytes(&mut self, bytes: VteBytes) {
         self.set_should_render(true);
         for &byte in &bytes {
-            self.vte_parser.advance(&mut self.grid, byte);
+            match self.apc_parser.advance(byte) {
+                ApcParserResult::PassThrough(b) => {
+                    self.vte_parser.advance(&mut self.grid, b);
+                },
+                ApcParserResult::Collecting => {
+                    // APC in progress, don't send to vte
+                },
+                ApcParserResult::Complete(apc_data) => {
+                    // Complete APC captured — dispatch to kitty handler
+                    let (cursor_y, cursor_x) = self.grid.cursor_coordinates().unwrap_or((0, 0));
+                    let result = dispatch_kitty_apc(
+                        &apc_data,
+                        &mut self.grid.kitty_image_store.borrow_mut(),
+                        &mut self.grid.kitty_chunk_assembler,
+                        cursor_y as u32,
+                        cursor_x as u32,
+                    );
+                    if !result.response.is_empty() {
+                        self.grid.pending_messages_to_pty.push(result.response);
+                    }
+                    if !result.passthrough_apc.is_empty() {
+                        self.pending_kitty_passthrough.push(result.passthrough_apc);
+                    }
+                },
+                ApcParserResult::Aborted(bytes) => {
+                    // Not a Kitty APC, pass through to vte
+                    for b in bytes {
+                        self.vte_parser.advance(&mut self.grid, b);
+                    }
+                },
+            }
         }
     }
     fn cursor_coordinates(&self, _client_id: Option<ClientId>) -> Option<(usize, usize)> {
@@ -586,6 +620,10 @@ impl Pane for TerminalPane {
         self.grid.pending_messages_to_pty.drain(..).collect()
     }
 
+    fn take_pending_kitty_passthrough(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.pending_kitty_passthrough)
+    }
+
     fn drain_clipboard_update(&mut self) -> Option<String> {
         self.grid.pending_clipboard_update.take()
     }
@@ -948,6 +986,15 @@ impl Pane for TerminalPane {
         self.grid
             .pane_contents(get_full_scrollback, max_scrollback_lines)
     }
+    fn pane_contents_with_ansi(
+        &self,
+        _client_id: Option<ClientId>,
+        get_full_scrollback: bool,
+        max_scrollback_lines: Option<usize>,
+    ) -> PaneContents {
+        self.grid
+            .pane_contents_with_ansi(get_full_scrollback, max_scrollback_lines)
+    }
     fn update_exit_status(&mut self, exit_status: i32) {
         if let Some(notification_end) = self.notification_end.as_mut() {
             notification_end.set_exit_status(exit_status);
@@ -1048,6 +1095,8 @@ impl TerminalPane {
             geom: position_and_size,
             geom_override: None,
             vte_parser: vte::Parser::new(),
+            apc_parser: ApcParser::new(),
+            pending_kitty_passthrough: Vec::new(),
             active_at: Instant::now(),
             style,
             selection_scrolled_at: time::Instant::now(),
@@ -1255,6 +1304,13 @@ impl TerminalPane {
             self.remove_banner();
             AdjustedInput::DropToShellInThisPane { working_dir }
         })
+    }
+}
+
+impl Drop for TerminalPane {
+    fn drop(&mut self) {
+        use crate::panes::kitty_graphics::lifecycle::cleanup_on_close;
+        cleanup_on_close(&mut self.grid.kitty_image_store.borrow_mut());
     }
 }
 

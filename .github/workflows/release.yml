@@ -5,6 +5,9 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
@@ -17,10 +20,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && '' || github.ref }}
-          release_name: Release ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
+          release_name: Release ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
-          prerelease: false
+          prerelease: ${{ github.event_name != 'workflow_dispatch' && contains(github.ref_name, '-') }}
 
   build-release-normal:
     needs: create-release
