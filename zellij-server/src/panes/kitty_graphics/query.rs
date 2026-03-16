@@ -15,6 +15,8 @@ use super::store::KittyImageStore;
 ///
 /// # Example
 /// ```ignore
+/// use zellij_server::panes::kitty_graphics::query::build_kitty_response;
+///
 /// let response = build_kitty_response(31, "OK");
 /// // Returns: b"\x1b_Gi=31;OK\x1b\\"
 /// ```
